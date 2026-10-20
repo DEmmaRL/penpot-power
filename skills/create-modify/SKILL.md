@@ -16,8 +16,8 @@ system.
 
 ## Prerequisite
 
-Tools must be reachable (run `connection-setup`), and you should know the target
-session/file.
+Tools must be reachable (run `connection-setup`), and the intended page must be
+the focused one.
 
 ## Design-system-first rule
 

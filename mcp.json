@@ -2,13 +2,8 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "penpot": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote@0.15.1",
-        "https://${PENPOT_DOMAIN}/mcp/stream?userToken=${PENPOT_MCP_KEY}"
-      ]
+      "type": "streamable-http",
+      "url": "https://${PENPOT_DOMAIN}/mcp/stream?userToken=${PENPOT_MCP_KEY}"
     }
   }
 }

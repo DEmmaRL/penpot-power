@@ -14,7 +14,7 @@ description: >
 This power targets Penpot's **remote (hosted) MCP server** — the recommended
 option for most users. Nothing runs on the user's machine. The agent reaches it
 through the `penpot` MCP server in this power's `mcp.json`, which wraps the
-hosted Streamable HTTP endpoint via the `mcp-remote` proxy.
+hosted Streamable HTTP endpoint natively.
 
 Important facts (from Penpot's official docs):
 

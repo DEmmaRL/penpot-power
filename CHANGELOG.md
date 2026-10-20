@@ -5,6 +5,22 @@ All notable changes to **Penpot Power for Kiro** will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `mcp.json` connects natively over `streamable-http` instead of the `mcp-remote`
+  stdio proxy, so the MCP key is no longer passed as a command-line argument.
+  The `mcp-remote` form is documented as a fallback in `README.md`.
+
+### Fixed
+- `asset-and-token-sync`: token export uses `resolvedValueString` and groups by
+  `tokensByType`, matching the Plugin API (`resolvedValue` and `Token.type` do not exist).
+- `asset-and-token-sync`: temporary files go in `$TMPDIR` instead of `/tmp`; the
+  placeholder GitHub example no longer points at a third-party repository; the
+  size thresholds are consistent; private-repo failures have a fallback.
+- `design-to-code`: icons use `generateMarkup` SVG output rather than an export round trip.
+- Removed stale references to session selection, which does not exist in remote mode.
+
 ## [0.1.0] - 2026-10-20
 
 ### Added

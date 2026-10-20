@@ -35,7 +35,7 @@ Follow the decision tree below to import any asset reliably.
 | **1. Local `.svg` file** (icons, logos, illustrations) | Read the `.svg` file as text in the workspace, then call `penpot.createShapeFromSvg(svgString)` |
 | **2. Local raster image inside a GitHub/public repo** (any size, even 5 MB+) | Resolve the public raw URL (`git remote get-url origin` + branch + path) and call `await penpot.uploadMediaUrl(name, rawUrl)` — **0 base64 tokens!** |
 | **3. Local raster image (`.png`, `.jpg`, `.webp`) ≤ 15 KB** | Base64-encode via shell (`base64 -i <file> \| tr -d '\n'`) and call `await penpotUtils.importImage(b64, mimeType, name, x, y, width, height)` |
-| **4. Large local-only raster image (> 15 KB, untracked/private)** | Downscale/compress to a `/tmp` file first (`sips` / `ffmpeg` / `python3`), then send via `penpotUtils.importImage` (or chunk via `storage.b64 += ...`) |
+| **4. Large local-only raster image (> 15 KB, untracked/private)** | Downscale/compress to a temporary file in `$TMPDIR` first (`sips` / `ffmpeg` / `python3`), then send via `penpotUtils.importImage` (or chunk via `storage.b64 += ...`) |
 
 ---
 
@@ -56,8 +56,9 @@ group.name = "Icon / Brand Logo";
 return { id: group.id, name: group.name, width: group.width, height: group.height };
 ```
 
-> If the SVG contains embedded `<image>` tags pointing to external URLs, use
-> `await penpot.createShapeFromSvgWithImages(svgMarkup)` instead.
+> `createShapeFromSvg` is synchronous. If the SVG contains embedded `<image>` tags
+> pointing to external URLs, use `await penpot.createShapeFromSvgWithImages(svgMarkup)`
+> instead, because that variant returns a Promise.
 
 ---
 
@@ -76,8 +77,8 @@ with **zero base64 overhead**:
 ```javascript
 if (!penpot.currentPage) return "No Penpot page is focused.";
 const imgData = await penpot.uploadMediaUrl(
-  "kiro-logo-wordmark.png",
-  "https://raw.githubusercontent.com/kirodotdev/Kiro/main/assets/kiro-logo-wordmark.png"
+  "logo.png",
+  "https://raw.githubusercontent.com/<org>/<repo>/<branch>/assets/logo.png"
 );
 const rect = penpot.createRectangle();
 rect.name = imgData.name;
@@ -89,7 +90,9 @@ return { id: rect.id, width: rect.width, height: rect.height, imageId: imgData.i
 ```
 
 > **Note:** `penpot.uploadMediaUrl` runs on the Penpot server, so the URL must
-> be publicly reachable over HTTPS (never `localhost` or `127.0.0.1`).
+> be publicly reachable over HTTPS (never `localhost` or `127.0.0.1`). Files in a
+> private repository return an error the server cannot fetch; if the call fails,
+> fall back to Method 3.
 
 ---
 
@@ -117,18 +120,18 @@ penpotUtils.importImage(
    ```bash
    ls -lh path/to/image.png
    ```
-2. **If the file is > 15 KB**, resize/compress a temporary copy first so the
-   base64 string stays small (~5 KB–20 KB) and fast for tool calls:
+2. **If the file is > 15 KB**, resize/compress a temporary copy in `$TMPDIR` first
+   so the base64 string stays under ~20 KB and fast for tool calls:
    ```bash
    # macOS (built-in sips): resize max dimension to 512px
-   sips -Z 512 path/to/large-image.png --out /tmp/penpot-upload.png
+   sips -Z 512 path/to/large-image.png --out "$TMPDIR/penpot-upload.png"
    ```
    *(If transparency is not needed, converting to JPEG via
-   `sips -s format jpeg -s formatOptions 80 -Z 800 input.png --out /tmp/penpot-upload.jpg`
+   `sips -s format jpeg -s formatOptions 80 -Z 800 input.png --out "$TMPDIR/penpot-upload.jpg"`
    shrinks a 1.4 MB PNG down to ~10 KB!)*
 3. **Read the base64 string** (with no line breaks and **no** `data:...` prefix):
    ```bash
-   base64 -i /tmp/penpot-upload.png | tr -d '\n'
+   base64 -i "$TMPDIR/penpot-upload.png" | tr -d '\n'
    ```
 4. **Upload and create the shape** via `execute_code`:
    ```javascript
@@ -148,7 +151,7 @@ penpotUtils.importImage(
 
 ### Chunking larger base64 payloads across `execute_code` calls
 
-If you must upload a larger uncompressed local asset (e.g., 30–60 KB) without
+If you must upload a larger uncompressed local asset (a base64 payload over ~20 KB) without
 truncating a single tool call, accumulate chunks in the persistent `storage`
 global:
 
@@ -196,14 +199,18 @@ theme configuration in the workspace:
 ```javascript
 if (!penpot.currentPage) return "No Penpot page is focused.";
 const catalog = penpot.library.local.tokens;
+// Each token exposes `resolvedValueString`. Token type is the grouping key in
+// `tokensByType`; `value` (the raw reference) exists only on typed tokens.
 const exportedSets = catalog.sets.map(set => ({
   name: set.name,
   active: set.active,
-  tokens: set.tokens.map(t => ({
-    name: t.name,
-    type: t.type,
-    value: t.value,
-    resolvedValue: t.resolvedValue
+  tokensByType: set.tokensByType.map(([type, tokens]) => ({
+    type,
+    tokens: tokens.map(t => ({
+      name: t.name,
+      value: t.value ?? null,
+      resolvedValue: t.resolvedValueString
+    }))
   }))
 }));
 const libraryColors = penpot.library.local.colors.map(c => ({
@@ -221,7 +228,7 @@ return { sets: exportedSets, libraryColors };
 - **Explicit user intent only:** Only read and upload workspace files (images,
   SVGs, or token files) that the user has explicitly asked to send to Penpot.
   Never read or transmit unrelated files, credentials, or `.env` data.
-- **Clean up temporary files:** If you create a resized preview image in `/tmp`
+- **Clean up temporary files:** If you create a resized preview image in `$TMPDIR`
   before calling `penpotUtils.importImage`, delete the temporary file as soon as
   the upload completes.
 - **Official API usage:** Uses documented Penpot Plugin API methods

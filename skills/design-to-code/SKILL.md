@@ -21,7 +21,7 @@ board/component to translate.
 ## Step 1: Pin down the target
 
 Identify the exact shape(s) to implement. Confirm the board/component name and,
-if ambiguous, the session/file (see `connection-setup` for session selection).
+if ambiguous, confirm the target page is the focused one. Remote MCP always acts on the focused page (see `connection-setup`).
 
 ## Step 2: Extract CSS, `@font-face` rules, and markup directly from Penpot
 
@@ -55,7 +55,7 @@ const tokens = penpotUtils.tokenOverview ? penpotUtils.tokenOverview() : {};
 return { structure, tokens };
 ```
 
-For images/icons, use `export_shape` (pass the shape ID, `"selection"`, or `"page"`; SVG preferred for icons, PNG for raster, or `mode: "fill"` for raw image fills) and reference the exported assets in the generated code.
+For icons, use the SVG markup from `penpot.generateMarkup(shapes, { type: 'svg' })` directly, which avoids an export round trip. For raster images or raw image fills, use `export_shape` (pass the shape ID, `"selection"`, or `"page"`; PNG, or `mode: "fill"`) and reference the exported assets in the generated code.
 
 ## Step 4: Translate to the target stack
 
