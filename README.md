@@ -133,7 +133,7 @@ gap using Penpot's official Plugin API inside `execute_code`:
 - **GitHub / HTTPS images:** Imported at full resolution via `await penpot.uploadMediaUrl(name, url)`.
 - **Local PNG / JPEG / WebP files:** Encoded and uploaded via `await penpotUtils.importImage(base64, mimeType, name, x, y, width, height)`.
 
-If you prefer running the local Penpot MCP daemon (`npx -y @penpot/mcp@stable`),
+If you prefer running the local Penpot MCP daemon (`npx -y @penpot/mcp@latest`),
 see the [Penpot MCP Help Center](https://help.penpot.app/mcp/) and
 [penpot/penpot MCP README](https://github.com/penpot/penpot/blob/main/mcp/README.md).
 For a multi-client skill collection maintained by the Penpot team, see also

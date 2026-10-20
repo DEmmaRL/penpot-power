@@ -18,11 +18,16 @@ and vector methods inside `execute_code` (`penpot.createShapeFromSvg`,
 `penpotUtils.importImage`) so the workspace agent can pass assets cleanly.
 
 > **Important API rules:**
-> - Never pass `http://localhost` or `http://127.0.0.1` URLs to
->   `penpot.uploadMediaUrl` or `fetch` inside `execute_code` — Penpot's hosted
->   server and browser sandbox only fetch public HTTPS URLs.
-> - Avoid encoding multi-megabyte raw images directly into a single tool call,
->   as large base64 strings exceed model output token limits.
+> - Do not rely on `fetch` inside `execute_code` to download assets. In our tests
+>   it failed for every URL, including a public HTTPS one (Penpot session,
+>   2026-10-20; cause not identified).
+> - Do not pass `http://localhost` or `http://127.0.0.1` URLs to
+>   `penpot.uploadMediaUrl`. This is untested. Penpot's docs do not say where the
+>   download runs, so a loopback address may not reach your machine.
+> - Base64 is for small files only. A 1.3 MB PNG is about 1.8 million base64
+>   characters, which is impractical to pass through a tool call. Use base64 for
+>   files of 15 KB or less, `uploadMediaUrl` with a public URL for larger ones, or
+>   the local MCP's `import_image` tool.
 
 Follow the decision tree below to import any asset reliably.
 
@@ -65,7 +70,7 @@ return { id: group.id, name: group.name, width: group.width, height: group.heigh
 ## Method 2: Repo Images Already on GitHub / Public HTTPS (`uploadMediaUrl`)
 
 When the image is committed and pushed to a public repository (or hosted on any
-public HTTPS URL), Penpot's backend can fetch it directly at full resolution
+public HTTPS URL), `uploadMediaUrl` should let Penpot's backend fetch it at full resolution (not yet tested in this repo)
 with **zero base64 overhead**:
 
 1. Check `git remote get-url origin`, current branch/commit, and `git status`
@@ -90,7 +95,8 @@ return { id: rect.id, width: rect.width, height: rect.height, imageId: imgData.i
 ```
 
 > **Note:** `penpot.uploadMediaUrl` runs on the Penpot server, so the URL must
-> be publicly reachable over HTTPS (never `localhost` or `127.0.0.1`). Files in a
+> be publicly reachable over HTTPS. Loopback addresses (`localhost`, `127.0.0.1`)
+> are untested. Files in a
 > private repository return an error the server cannot fetch; if the call fails,
 > fall back to Method 3.
 

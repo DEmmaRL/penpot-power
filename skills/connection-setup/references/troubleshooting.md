@@ -47,7 +47,7 @@ performance/power settings.
   paths is unavailable and `export_shape` cannot write to local paths. URL form:
   `https://<domain>/mcp/stream?userToken=YOUR_MCP_KEY` (SaaS domain:
   `design.penpot.app`).
-- **Local** (`npx -y @penpot/mcp@stable`): advanced users needing local-resource
+- **Local** (`npx -y @penpot/mcp@latest`): advanced users needing local-resource
   access. Serves the plugin at `http://localhost:4400/manifest.json` and the MCP
   endpoint at `http://localhost:4401/mcp`. A future variant of this power could
   add a local mode.
