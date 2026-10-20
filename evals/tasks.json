@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "fixtures": {
+    "snapshot": "Duplicate the test file before each run and restore the duplicate from the untouched original.",
+    "requiredShapes": [
+      "EVAL_FIX_Board: top-level board, 400x300, white fill, containing 3 rectangles with fill #FF0000",
+      "EVAL_T12_old: rectangle (any size) on the page, not inside any board"
+    ],
+    "files": {
+      "icon": "evals/fixtures/icon.svg",
+      "png": "evals/fixtures/dot.png",
+      "publicPngUrl": "<PUBLIC_PNG_URL: a stable public HTTPS PNG you host, under 1 MB>"
+    }
+  },
+  "tasks": [
+    {
+      "id": "T01",
+      "category": "read",
+      "control": false,
+      "prompt": "Count the boards on the current Penpot page. Create a text layer named EVAL_T01 whose characters are that number, as a string.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; if (!page) return { pass: false, detail: 'no page' }; const truth = penpotUtils.findShapes(s => s.type === 'board', page.root).length; const t = penpotUtils.findShapes(s => s.name === 'EVAL_T01', page.root)[0]; return { pass: !!t && t.characters === String(truth), detail: { truth, got: t ? t.characters : null } };"
+      }
+    },
+    {
+      "id": "T02",
+      "category": "read",
+      "control": false,
+      "prompt": "Count the local color styles in this file's library. Create a text layer named EVAL_T02 whose characters are that number, as a string.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; if (!page) return { pass: false, detail: 'no page' }; const truth = penpot.library.local.colors.length; const t = penpotUtils.findShapes(s => s.name === 'EVAL_T02', page.root)[0]; return { pass: !!t && t.characters === String(truth), detail: { truth, got: t ? t.characters : null } };"
+      }
+    },
+    {
+      "id": "T03",
+      "category": "create",
+      "control": false,
+      "prompt": "Create a top-level board named EVAL_T03_Card, 320 by 200 px, with a vertical flex layout and a 16 px gap between children. Put two rectangles inside it, named EVAL_T03_A and EVAL_T03_B, in that order. Place the board where it does not overlap any existing board.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const b = penpotUtils.findShapes(s => s.name === 'EVAL_T03_Card', page.root)[0]; if (!b) return { pass: false, detail: 'missing board' }; const lay = penpotUtils.shapeStructure(b, 1).layout || {}; const names = (b.children || []).map(c => c.name); const ok = b.width === 320 && b.height === 200 && lay.type === 'flex' && lay.dir === 'column' && Number(lay.rowGap) === 16 && names.join(',') === 'EVAL_T03_A,EVAL_T03_B'; return { pass: ok, detail: { w: b.width, h: b.height, layout: lay, children: names } };"
+      }
+    },
+    {
+      "id": "T04",
+      "category": "create",
+      "control": false,
+      "prompt": "Create a text layer named EVAL_T04 with the characters \"Hola EVAL\", font size 20, and auto-width sizing.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const t = penpotUtils.findShapes(s => s.name === 'EVAL_T04', page.root)[0]; if (!t) return { pass: false, detail: 'missing' }; const ok = t.characters === 'Hola EVAL' && Number(t.fontSize) === 20 && t.growType === 'auto-width'; return { pass: ok, detail: { chars: t.characters, fontSize: t.fontSize, growType: t.growType } };"
+      }
+    },
+    {
+      "id": "T05",
+      "category": "modify",
+      "control": false,
+      "prompt": "In EVAL_FIX_Board, replace every #FF0000 fill with #00AA55. Do not change anything else.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const b = penpotUtils.findShapes(s => s.name === 'EVAL_FIX_Board', page.root)[0]; if (!b) return { pass: false, detail: 'missing board' }; const all = penpotUtils.findShapes(() => true, b); const has = (s, c) => (s.fills || []).some(f => (f.fillColor || '').toUpperCase() === c); const red = all.filter(s => has(s, '#FF0000')).length; const green = all.filter(s => has(s, '#00AA55')).length; return { pass: red === 0 && green >= 3, detail: { red, green } };"
+      }
+    },
+    {
+      "id": "T06",
+      "category": "create",
+      "control": false,
+      "prompt": "Create a new 375 by 812 board named EVAL_T06 next to the existing top-level boards. It must not overlap any of them.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const me = penpotUtils.findShapes(s => s.name === 'EVAL_T06', page.root)[0]; if (!me) return { pass: false, detail: 'missing' }; const top = page.root.children.filter(c => c.type === 'board' && c.id !== me.id); const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height; const overlaps = top.filter(b => hit(me, b)).map(b => b.name); return { pass: me.width === 375 && me.height === 812 && overlaps.length === 0, detail: { size: [me.width, me.height], overlaps } };"
+      }
+    },
+    {
+      "id": "T07",
+      "category": "assets",
+      "control": false,
+      "prompt": "Import the SVG file at evals/fixtures/icon.svg into the current page as an editable vector group named EVAL_T07_icon, at 24 by 24 px.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const g = penpotUtils.findShapes(s => s.name === 'EVAL_T07_icon', page.root)[0]; if (!g) return { pass: false, detail: 'missing' }; const ok = Math.abs(g.width - 24) <= 1 && Math.abs(g.height - 24) <= 1 && (g.children || []).length > 0; return { pass: ok, detail: { w: g.width, h: g.height, children: (g.children || []).length } };"
+      }
+    },
+    {
+      "id": "T08",
+      "category": "assets",
+      "control": false,
+      "prompt": "Import the PNG at evals/fixtures/dot.png onto the current page at x=100, y=100, width 64 px (keep the aspect ratio), named EVAL_T08.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const s = penpotUtils.findShapes(x => x.name === 'EVAL_T08', page.root)[0]; if (!s) return { pass: false, detail: 'missing' }; const ok = Math.abs(s.width - 64) <= 1 && Math.abs(s.height - 64) <= 1; return { pass: ok, detail: { w: s.width, h: s.height, x: s.x, y: s.y } };"
+      }
+    },
+    {
+      "id": "T09",
+      "category": "assets",
+      "control": false,
+      "prompt": "Upload the PNG at {{PUBLIC_PNG_URL}} into Penpot from its URL, and place it as a rectangle named EVAL_T09 with that image as its fill.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const s = penpotUtils.findShapes(x => x.name === 'EVAL_T09', page.root)[0]; if (!s) return { pass: false, detail: 'missing' }; const ok = (s.fills || []).some(f => !!f.fillImage); return { pass: ok, detail: { fills: (s.fills || []).map(f => Object.keys(f)) } };"
+      }
+    },
+    {
+      "id": "T10",
+      "category": "tokens",
+      "control": false,
+      "prompt": "Export all token sets of this file to evals/out/T10-tokens.json as JSON, with a top-level \"sets\" array. Each set must include its name, active flag, and tokens grouped by type.",
+      "verify": {
+        "type": "shell",
+        "code": "node -e \"const j=require('./evals/out/T10-tokens.json'); const ok=Array.isArray(j.sets)&&j.sets.length>0&&j.sets.every(s=>typeof s.name==='string'&&typeof s.active==='boolean'&&Array.isArray(s.tokensByType)&&s.tokensByType.length>0); process.exit(ok?0:1)\""
+      }
+    },
+    {
+      "id": "T11",
+      "category": "design-to-code",
+      "control": false,
+      "prompt": "Generate the CSS for EVAL_FIX_Board from Penpot and save it to evals/out/T11-board.css. It must include the board's width and height.",
+      "verify": {
+        "type": "shell",
+        "code": "node -e \"const fs=require('fs'); const c=fs.readFileSync('./evals/out/T11-board.css','utf8'); const ok=/width:\\s*400/.test(c)&&/height:\\s*300/.test(c); process.exit(ok?0:1)\""
+      }
+    },
+    {
+      "id": "T12",
+      "category": "control",
+      "control": true,
+      "prompt": "Rename the rectangle EVAL_T12_old to EVAL_T12_new and set its opacity to 50%.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const old = penpotUtils.findShapes(s => s.name === 'EVAL_T12_old', page.root)[0]; const n = penpotUtils.findShapes(s => s.name === 'EVAL_T12_new', page.root)[0]; const ok = !old && !!n && Math.abs(n.opacity - 0.5) < 0.01; return { pass: ok, detail: { oldExists: !!old, newOpacity: n ? n.opacity : null } };"
+      }
+    },
+    {
+      "id": "T13",
+      "category": "control",
+      "control": true,
+      "prompt": "Create an ellipse named EVAL_T13 with a 2 px stroke of #123456.",
+      "verify": {
+        "type": "penpot",
+        "code": "const page = penpot.currentPage; const e = penpotUtils.findShapes(s => s.name === 'EVAL_T13', page.root)[0]; if (!e) return { pass: false, detail: 'missing' }; const ok = (e.strokes || []).some(st => (st.strokeColor || '').toUpperCase() === '#123456' && Number(st.strokeWidth) === 2); return { pass: ok, detail: { strokes: (e.strokes || []).map(st => ({ c: st.strokeColor, w: st.strokeWidth })) } };"
+      }
+    }
+  ]
+}
