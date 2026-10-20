@@ -1,0 +1,52 @@
+{
+  "sets": [
+    {
+      "name": "Impulso-Core-Tokens",
+      "active": true,
+      "tokensByType": [
+        { "type": "color", "tokens": [
+          { "name": "color.brand.primary", "value": "#1D4ED8", "resolvedValue": "#1D4ED8" }
+        ] }
+      ]
+    },
+    {
+      "name": "Tokens-Impulso-Trans",
+      "active": true,
+      "tokensByType": [
+        { "type": "color", "tokens": [
+          { "name": "color.brand.primary", "value": "#2563EB", "resolvedValue": "#2563EB" },
+          { "name": "color.text.primary", "value": "#0F172A", "resolvedValue": "#0F172A" },
+          { "name": "color.text.default", "value": "{color.text.primary}", "resolvedValue": "#0F172A" }
+        ] },
+        { "type": "fontFamilies", "tokens": [
+          { "name": "font.family.body", "value": ["Atkinson Hyperlegible"], "resolvedValue": "Atkinson,Hyperlegible" },
+          { "name": "font.family.heading", "value": ["Outfit"], "resolvedValue": "Outfit" }
+        ] },
+        { "type": "fontSizes", "tokens": [
+          { "name": "font.size.2xl", "value": "28px", "resolvedValue": "28" }
+        ] },
+        { "type": "fontWeights", "tokens": [
+          { "name": "font.weight.bold", "value": "700", "resolvedValue": "700" }
+        ] },
+        { "type": "borderRadius", "tokens": [
+          { "name": "radius.full", "value": "9999px", "resolvedValue": "9999" }
+        ] },
+        { "type": "spacing", "tokens": [
+          { "name": "spacing.md", "value": "16px", "resolvedValue": "16" }
+        ] },
+        { "type": "shadow", "tokens": [
+          { "name": "shadow.card", "value": [], "resolvedValue": "" }
+        ] }
+      ]
+    },
+    {
+      "name": "Draft-Inactive",
+      "active": false,
+      "tokensByType": [
+        { "type": "color", "tokens": [
+          { "name": "color.draft.only", "value": "#000000", "resolvedValue": "#000000" }
+        ] }
+      ]
+    }
+  ]
+}
