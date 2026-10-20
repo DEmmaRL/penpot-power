@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "penpot",
+  "version": "0.1.0",
+  "description": "Design, inspect, sync local assets/tokens, and generate code from Penpot files using the official Penpot MCP server. Covers remote-compatible image/SVG upload, design-system discovery, UI/UX creation, and design-to-code workflows.",
+  "author": {
+    "name": "Diego Rivera"
+  },
+  "keywords": [
+    "penpot",
+    "penpot mcp",
+    "penpot file",
+    "penpot board",
+    "penpot design",
+    "penpot assets",
+    "penpot design-system",
+    "penpot design-to-code"
+  ],
+  "homepage": "https://help.penpot.app/mcp/",
+  "repository": "https://github.com/DEmmaRL/penpot-power",
+  "license": "MIT"
+}
