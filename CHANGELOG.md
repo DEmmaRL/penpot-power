@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `scripts/tokens-to-css.mjs`: standalone deterministic token compiler converting Penpot
+  token exports into CSS custom properties (`:root`), Tailwind v4 theme blocks (`@theme`),
+  or Tailwind v3 JavaScript configuration modules (`--tailwind`). Includes comprehensive test suite.
+- `connection-setup`: operational Diagnostic Healthcheck Probe and structured recovery protocols
+  for suspended browser tabs, dropped plugin instances, and invalid keys, plus focused page guardrails.
+
 ### Changed
 - `mcp.json` connects natively over `streamable-http` instead of the `mcp-remote`
   stdio proxy, so the MCP key is no longer passed as a command-line argument.

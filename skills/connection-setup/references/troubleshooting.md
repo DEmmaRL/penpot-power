@@ -15,21 +15,49 @@ Reference for the `connection-setup` skill. Remote (hosted) MCP server mode.
 | Browser blocks the connection | Chromium private-network / local restrictions (mostly local mode) | Allow local network access, or use Firefox. (Primarily affects local mode.) |
 | Weak/garbled design results | Underpowered model | Use a capable vision-language model; design tasks need visual inspection. |
 
-## Keeping the Penpot tab awake (per browser)
+## Diagnostic Healthcheck Snippet
 
-Because MCP runs inside the Penpot tab, you want the browser to avoid
-suspending it during long sessions. Options vary by browser:
+Run this in `execute_code` before any operations or immediately after any failure:
 
-- **Chrome / Edge (Chromium):** look for a per-site "keep active / don't put to
-  sleep" option in the performance settings and add your Penpot site; pinning
-  the tab also reduces the chance it gets suspended.
-- **Firefox:** there is no per-site control. Advanced users can disable
-  low-memory tab unloading in `about:config`, at the cost of higher memory use.
-- **Safari:** no comparable per-site control — simply keep the Penpot tab open
-  and in the foreground while agents are running.
+```javascript
+if (!penpot.currentPage) {
+  return { status: "no_page", error: "No Penpot page is focused or plugin is not connected." };
+}
+return {
+  status: "connected",
+  page: penpot.currentPage.name,
+  pageId: penpot.currentPage.id,
+  boards: penpotUtils.findShapes(s => s.type === "board", penpot.currentPage.root).length
+};
+```
 
-Exact menu paths change between browser versions; check your browser's current
-performance/power settings.
+## Detailed Recovery Procedures
+
+### 1. Tab Suspended ("tab appears suspended", timeout, transport closed)
+1. **Wake up the tab:** Click inside the Penpot browser tab. Wait 2 seconds.
+2. **Re-probe:** Re-run the diagnostic snippet above.
+3. **Prevent background freezing:**
+   - **Chrome / Brave:** Navigate to `chrome://settings/performance`. Look for **"Memory Saver"** → **"Always keep these sites active"** → Add `design.penpot.app` (or your domain).
+   - **Edge:** Navigate to `edge://settings/system`. Look for **"Never put these sites to sleep"** → Add `design.penpot.app`.
+   - **Pin the tab:** Right-click the Penpot tab header → **Pin tab**. Pinned tabs have higher memory priority in modern browsers.
+
+### 2. Plugin Disconnected ("No Penpot plugin instance is connected")
+1. Open your Penpot design file.
+2. In the top menu, click **File → MCP Server → Connect** (or click the floating MCP plugin dialog).
+3. Confirm the status turns green ("Connected").
+4. Re-run the diagnostic snippet.
+
+### 3. Key Expired or Revoked (401 / 403 Unauthorized)
+1. In Penpot, navigate to **Your account → Integrations → MCP Server**.
+2. Click **Generate / Regenerate MCP Key**. (This invalidates any previous key immediately).
+3. Copy the URL containing the new `userToken`.
+4. Update `PENPOT_MCP_KEY` in your Kiro environment.
+5. Re-run the diagnostic snippet.
+
+### 4. Wrong Page Focused
+1. Remote MCP commands always apply to the **currently focused page** in Penpot.
+2. Compare the `page` name returned by the diagnostic snippet with your target.
+3. If they differ, switch pages in Penpot before making edits.
 
 ## The MCP key (userToken)
 

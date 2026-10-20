@@ -59,8 +59,21 @@ For icons, use the SVG markup from `penpot.generateMarkup(shapes, { type: 'svg' 
 
 ## Step 4: Translate to the target stack
 
+- **Deterministic Design Tokens Compilation:**
+  If the file has design tokens, export them using `asset-and-token-sync` (into `tokens.json`), then compile them deterministically:
+  ```bash
+  # Pure CSS custom properties (:root)
+  node scripts/tokens-to-css.mjs tokens.json tokens.css
+
+  # Tailwind v4 theme block (@theme)
+  node scripts/tokens-to-css.mjs tokens.json theme.css --theme
+
+  # Tailwind v3 JavaScript config module
+  node scripts/tokens-to-css.mjs tokens.json tailwind.tokens.js --tailwind
+  ```
+  *Why use this script over LLM transcription?* The script is deterministic, unit-tested, resolves aliases (`var(--...)`), normalizes unitless values into `px`, quotes font families safely, and avoids manual syntax errors.
+
 - Map Penpot flex layouts to CSS flexbox/grid; preserve gap and direction.
-- Convert design tokens to CSS variables (or the project's token system).
 - Reuse existing components in code where the design reuses Penpot components.
 - Keep names aligned with the design (board/component names → component names).
 

@@ -227,6 +227,18 @@ const libraryColors = penpot.library.local.colors.map(c => ({
 return { sets: exportedSets, libraryColors };
 ```
 
+Once saved to `tokens.json` in the workspace, compile them directly to code with the built-in compiler:
+```bash
+# Compile to standard CSS custom properties (:root)
+node scripts/tokens-to-css.mjs tokens.json tokens.css
+
+# Or compile to Tailwind v4 theme block (@theme)
+node scripts/tokens-to-css.mjs tokens.json theme.css --theme
+
+# Or compile to Tailwind v3 JavaScript config
+node scripts/tokens-to-css.mjs tokens.json tailwind.tokens.js --tailwind
+```
+
 ---
 
 ## Privacy & Safety Guardrails

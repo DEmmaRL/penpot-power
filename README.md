@@ -22,13 +22,24 @@ loading only the relevant skill and tools:
 
 | Skill | Purpose |
 | --- | --- |
-| `connection-setup` | Connects the agent to your active Penpot file via the in-browser MCP plugin and troubleshoots common tab/session issues. |
+| `connection-setup` | Live canvas healthcheck probe, diagnostic decision tree, and step-by-step recovery protocols for suspended browser tabs and disconnected plugins. |
 | `read-inspect` | Explores pages, walks the shape tree (`penpotUtils.shapeStructure`), audits components/palettes/tokens, and exports PNG/SVG previews (`export_shape`). |
 | `create-modify` | Builds and updates boards, typography, components, and responsive Flex/Grid layouts (`board.addFlexLayout`, `penpotUtils.addFlexLayout`), plus bulk color replacement (`penpot.replaceColor`). |
 | `asset-and-token-sync` | Sends local repository assets (`.svg` vectors, `.png`/`.jpg`/`.webp` images, and GitHub-hosted assets) into Penpot via `execute_code` (`createShapeFromSvg`, `penpotUtils.importImage`, `uploadMediaUrl`), and syncs design tokens bidirectionally (`penpot.library.local.tokens`). |
-| `design-to-code` | Extracts exact CSS (`penpot.generateStyle`), `@font-face` rules (`penpot.generateFontFaces`), and HTML/SVG markup (`penpot.generateMarkup`) to translate designs into clean frontend code. |
+| `design-to-code` | Extracts exact CSS (`penpot.generateStyle`), `@font-face` rules (`penpot.generateFontFaces`), and HTML/SVG markup (`penpot.generateMarkup`), coupled with a deterministic token compiler (`scripts/tokens-to-css.mjs`). |
 
 ---
+
+## What this Power Adds over Raw MCP
+
+A common question is: *"Why use this power if Penpot already provides an MCP server?"*
+
+1. **Deterministic Design Token Compiler (`scripts/tokens-to-css.mjs`):**
+   The MCP server only provides raw API access. This power bundles a standalone, zero-dependency token compiler that converts Penpot token exports into production-ready CSS variables (`:root`), Tailwind v4 theme blocks (`@theme`), or Tailwind v3 configuration modules deterministically—guaranteeing unit tests, alias resolution (`var(--...)`), and correct unit conversions without LLM hallucinations.
+2. **Actionable Connection & Tab Suspension Recovery:**
+   Hosted Penpot MCP sessions frequently drop when the browser suspends the background tab. Instead of leaving the agent stuck with opaque socket errors, `connection-setup` executes a diagnostic probe and provides step-by-step recovery instructions to wake and pin the tab.
+3. **Hardened API Guardrails:**
+   Enforces non-obvious Penpot Plugin API rules (e.g. read-only `width`/`height`, immutable `fills` arrays, `growType` settling delays, and preserved child ordering in flex layouts) that are not documented in the MCP tool descriptions.
 
 ## Requirements
 
@@ -151,6 +162,15 @@ penpot-power/
 ├── CHANGELOG.md                # Release history
 ├── LICENSE                     # MIT License
 ├── NOTICE                      # Third-party attributions (MIT, MPL-2.0)
+├── scripts/
+│   ├── tokens-to-css.mjs       # Deterministic token compiler (:root, @theme, Tailwind)
+│   └── test/
+│       ├── tokens-export.sample.json
+│       └── tokens-to-css.test.mjs
+├── evals/                      # Power vs. Direct MCP evaluation suite
+│   ├── tasks.json              # 13 verified tasks + controls
+│   ├── schedule.mjs            # Seeded, reproducible run order
+│   └── README.md               # Evaluation protocol and metrics
 └── skills/
     ├── connection-setup/
     │   ├── SKILL.md
