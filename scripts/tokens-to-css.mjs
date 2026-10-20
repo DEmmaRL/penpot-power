@@ -43,23 +43,70 @@ function cssValue(token, type) {
   return { skip: `type "${type}" has no direct CSS custom-property form` };
 }
 
-export function tokensToCss(data, sourceName = "tokens.json", options = {}) {
-  const { wrapper = ":root" } = options;
-  if (!data || !Array.isArray(data.sets)) throw new Error("Input must have a top-level \"sets\" array.");
-  const byName = new Map();
-  const skipped = [];
-  for (const set of data.sets) {
-    if (!set.active) continue;
-    for (const group of set.tokensByType ?? []) {
-      for (const token of group.tokens ?? []) {
-        const result = cssValue(token, group.type);
-        if (result.skip) {
-          skipped.push(`${set.name}: ${token.name} (${result.skip})`);
-          continue;
+export function extractDtcgTokens(node, path = [], inheritedType = null) {
+  const tokens = [];
+  if (!node || typeof node !== "object") return tokens;
+
+  const currentType = node.$type || node.type || inheritedType;
+
+  // Check if this node is a leaf token
+  if ("$value" in node || "value" in node) {
+    const rawVal = node.$value !== undefined ? node.$value : node.value;
+    tokens.push({
+      name: path.join("."),
+      value: rawVal,
+      type: currentType
+    });
+    return tokens;
+  }
+
+  for (const [key, child] of Object.entries(node)) {
+    if (key.startsWith("$") && key !== "$type") continue;
+    if (child && typeof child === "object") {
+      tokens.push(...extractDtcgTokens(child, [...path, key], currentType));
+    }
+  }
+  return tokens;
+}
+
+export function extractTokens(data) {
+  if (!data || typeof data !== "object") throw new Error("Input must be a valid JSON object or sets array.");
+  if (Array.isArray(data.sets)) {
+    const byName = new Map();
+    for (const set of data.sets) {
+      if (!set.active) continue;
+      for (const group of set.tokensByType ?? []) {
+        for (const token of group.tokens ?? []) {
+          byName.set(token.name, {
+            name: token.name,
+            value: token.value ?? token.resolvedValue,
+            type: group.type,
+            set: set.name
+          });
         }
-        byName.set(cssName(token.name), { name: cssName(token.name), value: result.value, set: set.name });
       }
     }
+    return [...byName.values()];
+  }
+  const extracted = extractDtcgTokens(data);
+  if (extracted.length === 0 && !Array.isArray(data.sets)) {
+    throw new Error("No tokens found. Input must be a valid W3C DTCG token object or Penpot sets export.");
+  }
+  return extracted;
+}
+
+export function tokensToCss(data, sourceName = "tokens.json", options = {}) {
+  const { wrapper = ":root" } = options;
+  const rawTokens = extractTokens(data);
+  const byName = new Map();
+  const skipped = [];
+  for (const token of rawTokens) {
+    const result = cssValue(token, token.type);
+    if (result.skip) {
+      skipped.push(`${token.name} (${result.skip})`);
+      continue;
+    }
+    byName.set(cssName(token.name), { name: cssName(token.name), value: result.value });
   }
   const entries = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   const lines = [
@@ -73,7 +120,7 @@ export function tokensToCss(data, sourceName = "tokens.json", options = {}) {
 }
 
 export function tokensToTailwind(data, sourceName = "tokens.json") {
-  if (!data || !Array.isArray(data.sets)) throw new Error("Input must have a top-level \"sets\" array.");
+  const rawTokens = extractTokens(data);
   const theme = {
     colors: {},
     spacing: {},
@@ -83,38 +130,33 @@ export function tokensToTailwind(data, sourceName = "tokens.json") {
     fontFamily: {}
   };
   const skipped = [];
-  for (const set of data.sets) {
-    if (!set.active) continue;
-    for (const group of set.tokensByType ?? []) {
-      const type = group.type;
-      for (const token of group.tokens ?? []) {
-        let raw = token.value ?? token.resolvedValue;
-        if (typeof raw === "string" && /^\{([^}]+)\}$/.test(raw) && token.resolvedValue != null) {
-          raw = token.resolvedValue;
-        }
-        if (raw == null) continue;
-        const cleanKey = token.name
-          .toLowerCase()
-          .replace(/^(color|spacing|space|dimension|sizing|radius|border-radius|border-width|font-size|font-weight|font-family|font|shadow)\./g, "")
-          .replace(/^(size|family|weight)\./g, "")
-          .replace(/[^a-z0-9-]+/g, "-")
-          .replace(/^-+|-+$/g, "");
-        if (type === "color") {
-          theme.colors[cleanKey] = String(raw);
-        } else if (type === "spacing" || type === "dimension" || type === "sizing") {
-          theme.spacing[cleanKey] = /^\d+(\.\d+)?$/.test(String(raw)) ? `${raw}px` : String(raw);
-        } else if (type === "borderRadius") {
-          theme.borderRadius[cleanKey] = /^\d+(\.\d+)?$/.test(String(raw)) ? `${raw}px` : String(raw);
-        } else if (type === "fontSizes") {
-          theme.fontSize[cleanKey] = /^\d+(\.\d+)?$/.test(String(raw)) ? `${raw}px` : String(raw);
-        } else if (type === "fontWeights") {
-          theme.fontWeight[cleanKey] = String(raw);
-        } else if (type === "fontFamilies") {
-          theme.fontFamily[cleanKey] = Array.isArray(raw) ? raw : [String(raw)];
-        } else {
-          skipped.push(`${set.name}: ${token.name} (${type})`);
-        }
-      }
+  for (const token of rawTokens) {
+    let raw = token.value;
+    if (typeof raw === "string" && /^\{([^}]+)\}$/.test(raw) && token.resolvedValue != null) {
+      raw = token.resolvedValue;
+    }
+    if (raw == null) continue;
+    const cleanKey = token.name
+      .toLowerCase()
+      .replace(/^(color|spacing|space|dimension|sizing|radius|border-radius|border-width|font-size|font-weight|font-family|font|shadow)\./g, "")
+      .replace(/^(size|family|weight)\./g, "")
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    const type = token.type;
+    if (type === "color") {
+      theme.colors[cleanKey] = String(raw);
+    } else if (type === "spacing" || type === "dimension" || type === "sizing") {
+      theme.spacing[cleanKey] = /^\d+(\.\d+)?$/.test(String(raw)) ? `${raw}px` : String(raw);
+    } else if (type === "borderRadius") {
+      theme.borderRadius[cleanKey] = /^\d+(\.\d+)?$/.test(String(raw)) ? `${raw}px` : String(raw);
+    } else if (type === "fontSizes" || type === "fontSize") {
+      theme.fontSize[cleanKey] = /^\d+(\.\d+)?$/.test(String(raw)) ? `${raw}px` : String(raw);
+    } else if (type === "fontWeights" || type === "fontWeight") {
+      theme.fontWeight[cleanKey] = String(raw);
+    } else if (type === "fontFamilies" || type === "fontFamily") {
+      theme.fontFamily[cleanKey] = Array.isArray(raw) ? raw : [String(raw)];
+    } else {
+      skipped.push(`${token.name} (${type})`);
     }
   }
   const cleanTheme = Object.fromEntries(

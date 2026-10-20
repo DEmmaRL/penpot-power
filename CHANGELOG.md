@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `scripts/tokens-to-css.mjs`: standalone deterministic token compiler converting Penpot
-  token exports into CSS custom properties (`:root`), Tailwind v4 theme blocks (`@theme`),
-  or Tailwind v3 JavaScript configuration modules (`--tailwind`). Includes comprehensive test suite.
+- Standardized all design tokens on the **W3C Design Tokens Community Group (DTCG)** format
+  (`$value`, `$type`), making token exports natively compatible with Amazon Style Dictionary and Tokens Studio.
+- `scripts/tokens-to-css.mjs`: standalone deterministic token compiler converting W3C DTCG
+  tokens into CSS custom properties (`:root`), Tailwind v4 theme blocks (`@theme`),
+  or Tailwind v3 JavaScript configuration modules (`--tailwind`). Includes 12 unit tests.
+- `read-inspect`: Headless Token Compliance Audit (design linter) to calculate token coverage
+  rate and flag off-system colors and off-scale font sizes before translating designs to code.
 - `connection-setup`: operational Diagnostic Healthcheck Probe and structured recovery protocols
   for suspended browser tabs, dropped plugin instances, and invalid keys, plus focused page guardrails.
 

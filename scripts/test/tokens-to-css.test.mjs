@@ -72,7 +72,34 @@ test("tokensToTailwind produces valid Tailwind v3 configuration object", () => {
   assert.deepEqual(theme.fontFamily["body"], ["Atkinson Hyperlegible"]);
 });
 
-test("rejects input without a sets array", () => {
-  assert.throws(() => tokensToCss({}), /sets/);
-  assert.throws(() => tokensToTailwind({}), /sets/);
+test("parses standard W3C DTCG token format natively ($value, $type)", () => {
+  const dtcg = {
+    color: {
+      brand: {
+        primary: { $value: "#4F46E5", $type: "color" }
+      },
+      text: {
+        body: { $value: "#111827", $type: "color" },
+        muted: { $value: "{color.text.body}", $type: "color" }
+      }
+    },
+    spacing: {
+      lg: { $value: "24px", $type: "spacing" }
+    }
+  };
+  const { css } = tokensToCss(dtcg);
+  assert.match(css, /--color-brand-primary: #4F46E5;/);
+  assert.match(css, /--color-text-body: #111827;/);
+  assert.match(css, /--color-text-muted: var\(--color-text-body\);/);
+  assert.match(css, /--spacing-lg: 24px;/);
+
+  const { theme } = tokensToTailwind(dtcg);
+  assert.equal(theme.colors["brand-primary"], "#4F46E5");
+  assert.equal(theme.spacing["lg"], "24px");
+});
+
+test("rejects invalid input", () => {
+  assert.throws(() => tokensToCss(null), /valid/);
+  assert.throws(() => tokensToCss("invalid"), /valid/);
+  assert.throws(() => tokensToTailwind({}), /No tokens found/);
 });

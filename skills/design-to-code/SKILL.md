@@ -55,6 +55,11 @@ const tokens = penpotUtils.tokenOverview ? penpotUtils.tokenOverview() : {};
 return { structure, tokens };
 ```
 
+> **Tip (Token Compliance Check):** Run the **Token Compliance Audit** from the
+> `read-inspect` skill on `TargetBoard` before translating to code. It flags
+> off-system hex colors or unlinked font sizes so you can normalize them to proper
+> design tokens rather than hardcoding accidental values into the generated code.
+
 For icons, use the SVG markup from `penpot.generateMarkup(shapes, { type: 'svg' })` directly, which avoids an export round trip. For raster images or raw image fills, use `export_shape` (pass the shape ID, `"selection"`, or `"page"`; PNG, or `mode: "fill"`) and reference the exported assets in the generated code.
 
 ## Step 4: Translate to the target stack

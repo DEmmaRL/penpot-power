@@ -79,7 +79,66 @@ Tool names are namespaced by Kiro when the power is installed (e.g.
    };
    ```
 
-4. **Visual check** — when structure alone is not enough, export the shape and
+4. **Token Compliance Audit (Headless Token Linter)** — audit how well a board or page conforms to active design tokens before generating code:
+
+   ```javascript
+   if (!penpot.currentPage) return "No Penpot page is focused.";
+   const tokenCatalog = penpot.library.local.tokens;
+   const knownColors = new Map();
+   const knownFontSizes = new Map();
+
+   for (const set of tokenCatalog.sets || []) {
+     if (!set.active) continue;
+     for (const [type, tokens] of set.tokensByType || []) {
+       for (const t of tokens || []) {
+         const val = String(t.value ?? t.resolvedValueString ?? "").toUpperCase();
+         if (type === "color" && val.startsWith("#")) knownColors.set(val, t.name);
+         else if (type === "fontSizes" || type === "dimension") {
+           const num = parseFloat(val);
+           if (!isNaN(num)) knownFontSizes.set(num, t.name);
+         }
+       }
+     }
+   }
+   for (const c of penpot.library.local.colors || []) {
+     if (c.color) knownColors.set(c.color.toUpperCase(), `library:${c.name}`);
+   }
+
+   const allShapes = penpotUtils.findShapes(() => true, penpot.currentPage.root);
+   let totalAudited = 0;
+   let tokenizedCount = 0;
+   const deviations = [];
+
+   for (const s of allShapes) {
+     if (s.fills && Array.isArray(s.fills)) {
+       for (const f of s.fills) {
+         if (f.fillColor) {
+           totalAudited++;
+           const hex = f.fillColor.toUpperCase();
+           if (knownColors.has(hex)) tokenizedCount++;
+           else deviations.push({ shape: s.name || s.id, prop: "fill", actual: hex, hint: "off-system color" });
+         }
+       }
+     }
+     if (s.type === "text" && s.fontSize) {
+       totalAudited++;
+       const sz = parseFloat(s.fontSize);
+       if (knownFontSizes.has(sz)) tokenizedCount++;
+       else deviations.push({ shape: s.name || s.id, prop: "fontSize", actual: `${s.fontSize}px`, hint: "off-scale font size" });
+     }
+   }
+
+   const coverage = totalAudited > 0 ? Math.round((tokenizedCount / totalAudited) * 100) : 100;
+   return {
+     coverage: `${coverage}%`,
+     totalAudited,
+     tokenizedCount,
+     deviationsCount: deviations.length,
+     deviations: deviations.slice(0, 15)
+   };
+   ```
+
+5. **Visual check** — when structure alone is not enough, export the shape and
    look at it:
 
    Call `export_shape` with a specific shape ID, `"selection"` (the user's first currently selected shape), or `"page"` (the entire current page), and `mode: "shape"` (default) or `"fill"` (raw image fill, PNG only), then inspect the returned image.

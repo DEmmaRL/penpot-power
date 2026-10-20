@@ -198,33 +198,41 @@ return penpotUtils.tokenOverview();
 
 ### 2. Export Tokens from Penpot → Repo (`tokens.json` / CSS `:root`)
 
-To extract all token sets and resolved token values from Penpot so you can write
-them to a local `tokens.json`, CSS custom properties (`:root`), or Tailwind
-theme configuration in the workspace:
+To extract all token sets from Penpot directly into the standard **W3C Design Tokens Community Group (DTCG)** format (compatible with Amazon Style Dictionary, Tokens Studio, and our compiler):
 
 ```javascript
 if (!penpot.currentPage) return "No Penpot page is focused.";
 const catalog = penpot.library.local.tokens;
-// Each token exposes `resolvedValueString`. Token type is the grouping key in
-// `tokensByType`; `value` (the raw reference) exists only on typed tokens.
-const exportedSets = catalog.sets.map(set => ({
-  name: set.name,
-  active: set.active,
-  tokensByType: set.tokensByType.map(([type, tokens]) => ({
-    type,
-    tokens: tokens.map(t => ({
-      name: t.name,
-      value: t.value ?? null,
-      resolvedValue: t.resolvedValueString
-    }))
-  }))
-}));
-const libraryColors = penpot.library.local.colors.map(c => ({
-  name: c.name,
-  color: c.color,
-  opacity: c.opacity
-}));
-return { sets: exportedSets, libraryColors };
+const dtcg = {};
+
+const typeMap = {
+  fontSizes: "dimension",
+  spacing: "dimension",
+  borderRadius: "dimension",
+  fontFamilies: "fontFamily",
+  fontWeights: "fontWeight"
+};
+
+for (const set of catalog.sets || []) {
+  if (!set.active) continue;
+  for (const [type, tokens] of set.tokensByType || []) {
+    const dtcgType = typeMap[type] || type;
+    for (const t of tokens || []) {
+      const parts = t.name.split(".");
+      let curr = dtcg;
+      for (let i = 0; i < parts.length - 1; i++) {
+        curr[parts[i]] = curr[parts[i]] || {};
+        curr = curr[parts[i]];
+      }
+      const leaf = parts[parts.length - 1];
+      curr[leaf] = {
+        $value: t.value ?? t.resolvedValueString,
+        $type: dtcgType
+      };
+    }
+  }
+}
+return dtcg;
 ```
 
 Once saved to `tokens.json` in the workspace, compile them directly to code with the built-in compiler:
