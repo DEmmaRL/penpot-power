@@ -5,7 +5,7 @@ description: >
   design tokens into a Penpot file—even when connected through the remote
   (hosted) MCP server where `import_image` is unavailable. Use whenever the
   user wants to import images, logos, icons, screenshots, or design tokens from
-  their local workspace or git repository into Penpot.
+  their local workspace or git repository into Penpot, or export tokens to code.
 ---
 
 # Send Local Assets & Tokens to Penpot (Remote & Local MCP)
@@ -35,17 +35,33 @@ Follow the decision tree below to import any asset reliably.
 
 | Asset Type / Source | Best Method in `execute_code` |
 | --- | --- |
-| **1. Local `.svg` file** (icons, logos, illustrations) | Read the `.svg` file as text in the workspace, then call `penpot.createShapeFromSvg(svgString)` |
+| **1. Local `.svg` file** (icons, logos, illustrations) | Run `node scripts/prepare-asset.mjs <file.svg>` (or read text directly) and execute `penpot.createShapeFromSvg(svgString)` |
 | **2. Raster image on GitHub / public HTTPS** (any size, even 5 MB+) | Resolve the public raw URL and call `await penpot.uploadMediaUrl(name, rawUrl)` — **0 base64 tokens!** |
-| **3. Small local raster image (`.png`, `.jpg`, `.webp`) ≤ 15 KB** | Base64-encode via shell (`base64 -i <file> \| tr -d '\n'`) and call `await penpotUtils.importImage(b64, mimeType, name, x, y, width, height)` |
-| **4. Large local raster image (> 15 KB, private)** | **DO NOT CHUNK BASE64.** Use **Path A** (host on public HTTPS + `uploadMediaUrl`) or **Path B** (switch to local MCP with `import_image`). If only a low-res preview is needed, downscale with `sips` to ≤ 15 KB first. |
+| **3. Small local raster image (`.png`, `.jpg`, `.webp`, `.gif`) ≤ 15 KB** | Run `node scripts/prepare-asset.mjs <file.png> --x=100 --y=100 --width=64` and execute the generated `penpotUtils.importImage(...)` snippet |
+| **4. Large local raster image (> 15 KB, private)** | **DO NOT CHUNK BASE64.** Use **Path A** (host on public HTTPS + `uploadMediaUrl`) or **Path B** (switch to local MCP with `import_image`). If only a low-res preview is needed on macOS, pass `--downscale` to `scripts/prepare-asset.mjs`. |
+
+---
+
+## Fast Track: Cross-Platform Asset Helper (`scripts/prepare-asset.mjs`)
+
+To avoid platform-specific shell differences (`sips` on macOS vs Linux, or BSD `base64 -i` vs GNU `base64 -w 0`), use the bundled cross-platform script:
+
+```bash
+# Prepare an SVG vector (strips XML comments/prolog, checks for external <image> tags, emits execute_code JS)
+node scripts/prepare-asset.mjs assets/icon.svg --name="Brand Icon" --width=24 --height=24
+
+# Prepare a small PNG/JPEG/WebP/GIF (validates <= 15 KB, parses binary header dimensions, emits execute_code JS)
+node scripts/prepare-asset.mjs assets/dot.png --name="Dot" --x=100 --y=100 --width=64
+
+# Inspect asset metadata as JSON (dimensions, byte size, MIME type, raw base64)
+node scripts/prepare-asset.mjs assets/dot.png --json
+```
 
 ---
 
 ## Method 1: Local `.svg` Files → Editable Penpot Vectors
 
-Read the `.svg` file from the workspace using standard file tools, then pass the
-markup string to `penpot.createShapeFromSvg`:
+Read the `.svg` file from the workspace (or run `node scripts/prepare-asset.mjs <file.svg>`), then pass the markup string to `penpot.createShapeFromSvg`:
 
 ```javascript
 if (!penpot.currentPage) return "No Penpot page is focused.";
@@ -53,7 +69,8 @@ const svgMarkup = `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http:/
 const group = penpot.createShapeFromSvg(svgMarkup);
 if (!group) return "Failed to parse SVG.";
 group.name = "Icon / Brand Logo";
-// Optional: move into a target board
+// Optional: resize or move into a target board
+// group.resize(24, 24);
 // targetBoard.appendChild(group);
 // penpotUtils.setParentXY(group, 24, 24);
 return { id: group.id, name: group.name, width: group.width, height: group.height };
@@ -68,7 +85,7 @@ return { id: group.id, name: group.name, width: group.width, height: group.heigh
 ## Method 2: Repo Images Already on GitHub / Public HTTPS (`uploadMediaUrl`)
 
 When the image is committed and pushed to a public repository (or hosted on any
-public HTTPS URL), `uploadMediaUrl` should let Penpot's backend fetch it at full resolution (not yet tested in this repo)
+public HTTPS URL), `uploadMediaUrl` lets Penpot's backend fetch it at full resolution
 with **zero base64 overhead**:
 
 1. Check `git remote get-url origin`, current branch/commit, and `git status`
@@ -94,9 +111,8 @@ return { id: rect.id, width: rect.width, height: rect.height, imageId: imgData.i
 
 > **Note:** `penpot.uploadMediaUrl` runs on the Penpot server, so the URL must
 > be publicly reachable over HTTPS. Loopback addresses (`localhost`, `127.0.0.1`)
-> are untested. Files in a
-> private repository return an error the server cannot fetch; if the call fails,
-> fall back to Method 3.
+> cannot resolve your machine. Files in a private repository return an error; if
+> the call fails, fall back to Method 3.
 
 ---
 
@@ -120,38 +136,29 @@ penpotUtils.importImage(
 
 ### Step-by-step workflow for local files:
 
-1. **Check file size first** before encoding:
-   ```bash
-   ls -lh path/to/image.png
-   ```
-2. **If the file is > 15 KB**, resize/compress a temporary copy in `$TMPDIR` first
-   so the base64 string stays under ~20 KB and fast for tool calls:
-   ```bash
-   # macOS (built-in sips): resize max dimension to 512px
-   sips -Z 512 path/to/large-image.png --out "$TMPDIR/penpot-upload.png"
-   ```
-   *(If transparency is not needed, converting to JPEG via
-   `sips -s format jpeg -s formatOptions 80 -Z 800 input.png --out "$TMPDIR/penpot-upload.jpg"`
-   shrinks a 1.4 MB PNG down to ~10 KB!)*
-3. **Read the base64 string** (with no line breaks and **no** `data:...` prefix):
-   ```bash
-   base64 -i "$TMPDIR/penpot-upload.png" | tr -d '\n'
-   ```
-4. **Upload and create the shape** via `execute_code`:
-   ```javascript
-   if (!penpot.currentPage) return "No Penpot page is focused.";
-   const b64 = "iVBORw0KGgoAAAANSUhEUgAA..."; // raw base64, no data: prefix
-   const shape = await penpotUtils.importImage(
-     b64,
-     "image/png",
-     "hero-preview.png",
-     100,       // x
-     100,       // y
-     400,       // width (height auto-calculated to preserve aspect ratio!)
-     undefined  // height
-   );
-   return { id: shape.id, name: shape.name, width: shape.width, height: shape.height };
-   ```
+1. **Preferred (Cross-Platform):** Run `node scripts/prepare-asset.mjs path/to/image.png --name="hero.png" --x=100 --y=100 --width=400` and pass the generated snippet to `execute_code`.
+2. **Manual Shell Alternative:**
+   - Check file size (`ls -lh path/to/image.png`). Must be ≤ 15 KB.
+   - Read single-line base64 with **no** `data:...` prefix:
+     ```bash
+     # Cross-platform Node one-liner (works on macOS, Linux, Windows):
+     node -e 'process.stdout.write(require("fs").readFileSync(process.argv[1]).toString("base64"))' path/to/image.png
+     ```
+   - Upload and create the shape via `execute_code`:
+     ```javascript
+     if (!penpot.currentPage) return "No Penpot page is focused.";
+     const b64 = "iVBORw0KGgoAAAANSUhEUgAA..."; // raw base64, no data: prefix
+     const shape = await penpotUtils.importImage(
+       b64,
+       "image/png",
+       "hero-preview.png",
+       100,       // x
+       100,       // y
+       400,       // width (height auto-calculated to preserve aspect ratio!)
+       undefined  // height
+     );
+     return { id: shape.id, name: shape.name, width: shape.width, height: shape.height };
+     ```
 
 ### Large Images (> 15 KB): Why Base64 Chunking Fails & The Two Real Paths
 
@@ -160,31 +167,29 @@ Do **NOT** attempt to chunk large base64 strings across multiple `execute_code` 
 For any raster asset exceeding 15 KB, use one of the two real paths:
 
 1. **Path A — Public HTTPS URL (Recommended for Remote MCP):**
-   Host or push the image to an HTTPS location you control (e.g. GitHub raw URL, S3 bucket, CDN), then call:
-   ```javascript
-   const imgData = await penpot.uploadMediaUrl("asset.png", "https://your-public-cdn.com/asset.png");
-   const rect = penpot.createRectangle();
-   rect.name = imgData.name;
-   rect.resize(imgData.width, imgData.height);
-   rect.fills = [{ fillOpacity: 1, fillImage: imgData }];
-   return { id: rect.id, width: rect.width, height: rect.height };
-   ```
-   *Advantage:* Penpot's backend downloads it directly at full resolution with **zero base64 payload**.
-
+   Host or push the image to an HTTPS location you control (e.g. GitHub raw URL, S3 bucket, CDN), then call `await penpot.uploadMediaUrl(name, url)`.
 2. **Path B — Local MCP Server (`@penpot/mcp`):**
-   If the image is private/untracked and cannot be hosted on a public URL, switch to the official local MCP server (`npx -y @penpot/mcp@latest`). The local MCP server has native filesystem access and registers the `import_image` tool, allowing direct high-resolution imports from your local disk.
-
+   If the image is private/untracked and cannot be hosted on a public URL, switch to the official local MCP server (`npx -y @penpot/mcp@latest`), which registers the native `import_image` filesystem tool.
 3. **Fallback — Local Canvas Preview (Downscaling):**
-   If only an approximate visual preview on the canvas is needed, downscale or compress the file in `$TMPDIR` using `sips` (`sips -Z 512 ...` or JPEG compression) so that the file size drops below 15 KB before base64 encoding.
+   If only an approximate visual preview on the canvas is needed on macOS, run `node scripts/prepare-asset.mjs path/to/large.png --downscale` (which compresses a temporary preview in `$TMPDIR` below 15 KB and cleans up the temp file automatically).
 
 ---
 
 ## Bidirectional Design Token Sync (Repo ↔ Penpot)
 
-### 1. Import Tokens from Repo → Penpot (`penpot.library.local.tokens`)
+### 1. Import Tokens from Repo → Penpot (`scripts/css-to-tokens.mjs`)
 
-To import a project's CSS variables or W3C design tokens (`tokens.json`) into
-Penpot's native Token Catalog:
+To import a project's CSS custom properties (`tokens.css` with `:root` or `@theme`) or W3C DTCG JSON (`tokens.json`) into Penpot's native Token Catalog deterministically:
+
+```bash
+# Generate the ready-to-run execute_code JS snippet from CSS or JSON:
+node scripts/css-to-tokens.mjs tokens.css --penpot-js --set-name="Project Tokens"
+
+# Or convert a CSS file into standard W3C DTCG JSON first:
+node scripts/css-to-tokens.mjs tokens.css tokens.json --dtcg
+```
+
+You can also create/update tokens directly inside `execute_code`:
 
 ```javascript
 if (!penpot.currentPage) return "No Penpot page is focused.";
@@ -200,21 +205,27 @@ const radiusMd = set.addToken({ type: "borderRadius", name: "radius.md", value: 
 return penpotUtils.tokenOverview();
 ```
 
-### 2. Export Tokens from Penpot → Repo (`tokens.json` / CSS `:root`)
+### 2. Export Tokens from Penpot → Repo (`tokens.json` / CSS `:root` / Tailwind)
 
-To extract all token sets from Penpot directly into the standard **W3C Design Tokens Community Group (DTCG)** format (compatible with Amazon Style Dictionary, Tokens Studio, and our compiler):
+#### Option A: Standard W3C DTCG Format (`$value`, `$type`, `$extensions`)
+Extracts active token sets into the official **W3C Design Tokens Community Group (DTCG)** format, preserving Penpot subtype metadata (`$extensions["app.penpot"].type`) so `borderRadius`, `fontSizes`, and `spacing` map cleanly to CSS and Tailwind:
 
 ```javascript
 if (!penpot.currentPage) return "No Penpot page is focused.";
+if (storage.helpers?.exportTokensDtcg) return storage.helpers.exportTokensDtcg();
+
 const catalog = penpot.library.local.tokens;
 const dtcg = {};
 
 const typeMap = {
   fontSizes: "dimension",
   spacing: "dimension",
+  sizing: "dimension",
   borderRadius: "dimension",
+  borderWidth: "dimension",
   fontFamilies: "fontFamily",
-  fontWeights: "fontWeight"
+  fontWeights: "fontWeight",
+  opacity: "number"
 };
 
 for (const set of catalog.sets || []) {
@@ -229,22 +240,53 @@ for (const set of catalog.sets || []) {
         curr = curr[parts[i]];
       }
       const leaf = parts[parts.length - 1];
-      curr[leaf] = {
+      const entry = {
         $value: t.value ?? t.resolvedValueString,
         $type: dtcgType
       };
+      if (type !== dtcgType) {
+        entry.$extensions = { "app.penpot": { type } };
+      }
+      curr[leaf] = entry;
     }
   }
 }
 return dtcg;
 ```
 
-Once saved to `tokens.json` in the workspace, compile them directly to code with the built-in compiler:
+#### Option B: Multi-Set Catalog Export (`{ "sets": [...] }`)
+When the user asks to export all token sets (both active and inactive) with a top-level `"sets"` array grouped by type:
+
+```javascript
+if (!penpot.currentPage) return "No Penpot page is focused.";
+if (storage.helpers?.exportTokensRawSets) return storage.helpers.exportTokensRawSets();
+
+const catalog = penpot.library.local.tokens;
+const sets = [];
+for (const set of catalog.sets || []) {
+  const tokensByType = [];
+  for (const [type, tokens] of set.tokensByType || []) {
+    tokensByType.push({
+      type,
+      tokens: (tokens || []).map(t => ({
+        name: t.name,
+        value: t.value ?? t.resolvedValueString,
+        resolvedValue: t.resolvedValueString ?? t.value
+      }))
+    });
+  }
+  sets.push({ name: set.name, active: Boolean(set.active), tokensByType });
+}
+return { sets };
+```
+
+#### Compile Exported `tokens.json` (Both Option A and Option B are supported!)
+Once saved to `tokens.json` in the workspace, compile them deterministically with `scripts/tokens-to-css.mjs`:
 ```bash
 # Compile to standard CSS custom properties (:root)
 node scripts/tokens-to-css.mjs tokens.json tokens.css
 
-# Or compile to Tailwind v4 theme block (@theme)
+# Or compile to Tailwind v4 theme block (@theme with --color-*, --text-*, --font-*, --radius-*, --spacing-*)
 node scripts/tokens-to-css.mjs tokens.json theme.css --theme
 
 # Or compile to Tailwind v3 JavaScript config
@@ -260,7 +302,7 @@ node scripts/tokens-to-css.mjs tokens.json tailwind.tokens.js --tailwind
   Never read or transmit unrelated files, credentials, or `.env` data.
 - **Clean up temporary files:** If you create a resized preview image in `$TMPDIR`
   before calling `penpotUtils.importImage`, delete the temporary file as soon as
-  the upload completes.
+  the upload completes (`scripts/prepare-asset.mjs --downscale` handles this automatically).
 - **Official API usage:** Uses documented Penpot Plugin API methods
   (`createShapeFromSvg`, `uploadMediaUrl`, `uploadMediaData`, and
   `penpotUtils.importImage`).
