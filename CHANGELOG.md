@@ -9,14 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Standardized all design tokens on the **W3C Design Tokens Community Group (DTCG)** format
-  (`$value`, `$type`), making token exports natively compatible with Amazon Style Dictionary and Tokens Studio.
+  (`$value`, `$type`, `$extensions`), making token exports natively compatible with Amazon Style Dictionary and Tokens Studio while also preserving raw `{ sets: [...] }` exports for multi-set backups and evaluation tasks.
 - `scripts/tokens-to-css.mjs`: standalone deterministic token compiler converting W3C DTCG
-  tokens into CSS custom properties (`:root`), Tailwind v4 theme blocks (`@theme`),
-  or Tailwind v3 JavaScript configuration modules (`--tailwind`). Includes 12 unit tests.
-- `read-inspect`: Headless Token Compliance Audit (design linter) to calculate token coverage
-  rate and flag off-system colors and off-scale font sizes before translating designs to code.
+  or Penpot `sets` exports into CSS custom properties (`:root`), Tailwind v4 theme blocks (`@theme` with normalized `--color-*`, `--text-*`, `--font-*`, `--radius-*`, `--spacing-*` namespaces),
+  or Tailwind v3 JavaScript configuration modules (`--tailwind`).
+- `scripts/css-to-tokens.mjs`: reverse token compiler converting `:root` / `@theme` CSS or DTCG JSON into W3C DTCG JSON (`--dtcg`) or ready-to-run Penpot `execute_code` JS (`--penpot-js`) to upsert tokens in `penpot.library.local.tokens`.
+- `scripts/prepare-asset.mjs`: cross-platform asset optimizer and base64 bridge that cleans `.svg` markup, parses `.png`/`.jpg`/`.webp`/`.gif` binary header dimensions in pure Node.js, enforces the 15 KB remote MCP ceiling, and emits ready-to-run `execute_code` snippets.
+- `scripts/runtime-helpers.mjs`: persistent `storage.helpers` bundle for `execute_code` (`healthcheck`, `nextBoardPosition`, `contrastRatio`, `auditPage`, `exportTokensDtcg`, `exportTokensRawSets`).
+- `scripts/eval-harness.mjs`: automated evaluation CLI providing 1-click Penpot fixture resets (`setup`), verifier execution (`verify`), and Wilson 95% confidence interval statistical reporting (`stats`).
+- `read-inspect`: upgraded Headless Design Linter to track bound tokens (`shape.tokens`) vs. raw matching values, audit stroke colors and 4px/8px flex spacing, compute WCAG 2.x text contrast ratios, and flag < 24×24 px interactive touch targets.
+- `create-modify`: added patterns for CSS Grid layout (`board.addGridLayout()`), local component creation/instantiation (`createComponent` / `instance`), and prototyping interactions (`addInteraction`).
 - `connection-setup`: operational Diagnostic Healthcheck Probe and structured recovery protocols
   for suspended browser tabs, dropped plugin instances, and invalid keys, plus focused page guardrails.
+- `package.json`: zero-dependency Node.js manifest running 32 unit tests via `npm test`.
+- `README.md`: documented the 5 Future Ecosystem Integrations (Style Dictionary v4 presets, Tokens Studio Git sync bridge, Storybook/Codebase component manifest mapper, Automated Visual Regression diffing, and GitHub Actions CI + schema validation).
 
 ### Changed
 - `mcp.json` connects natively over `streamable-http` instead of the `mcp-remote`
@@ -24,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `mcp-remote` form is documented as a fallback in `README.md`.
 
 ### Fixed
+- `scripts/tokens-to-css.mjs`: fixed support for singular W3C DTCG types (`fontFamily`, `fontWeight`, `fontSize`), preserved `dimension` subtypes (`borderRadius`, `fontSizes`, `spacing`) via `$extensions["app.penpot"].type` and path inference, resolved `{alias}` chains in `tokensToTailwind`, and supported both tuple (`[type, tokens]`) and object (`{ type, tokens }`) forms of `tokensByType`.
 - `asset-and-token-sync`: removed base64 chunking dead-end; explicitly documented the two
   real paths for large images (> 15 KB): public HTTPS URL (`uploadMediaUrl`) or local MCP (`import_image`).
 - `asset-and-token-sync`: token export uses `resolvedValueString` and groups by

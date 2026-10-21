@@ -1,0 +1,24 @@
+{
+  "name": "penpot-power",
+  "version": "0.1.0",
+  "description": "Kiro Power for Penpot: remote MCP skills, deterministic W3C DTCG token compilers, cross-platform asset bridge, runtime canvas helpers, and evaluation harness.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "author": "Lon Rivera",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DEmmaRL/penpot-power.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --test scripts/test/*.test.mjs",
+    "tokens:css": "node scripts/tokens-to-css.mjs",
+    "tokens:import": "node scripts/css-to-tokens.mjs",
+    "asset:prepare": "node scripts/prepare-asset.mjs",
+    "eval:schedule": "node evals/schedule.mjs",
+    "eval:harness": "node scripts/eval-harness.mjs"
+  }
+}
