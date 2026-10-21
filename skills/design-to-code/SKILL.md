@@ -94,10 +94,10 @@ CSS Modules, Tailwind, etc.) if not already established in the project.
 
 ## Notes
 
-- Remote MCP mode does not write to the local filesystem. Produce the code in
-  the Kiro workspace using normal file tools; use Penpot only as the design
-  source. (If the user needs the MCP server itself to touch local files, that
-  requires the local Penpot MCP server, which this power does not configure.)
+- Penpot MCP servers (`penpot-local` and `penpot-remote`) run in an isolated
+  plugin sandbox and do not write to your project directory. Always generate code
+  files directly in your local workspace using your normal file-writing tools,
+  using Penpot exclusively as the visual design and style source.
 - Round sub-pixel values sensibly; Penpot may report fractional sizes.
 
 ---

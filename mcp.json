@@ -1,9 +1,13 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
-    "penpot": {
+    "penpot-local": {
       "type": "streamable-http",
-      "url": "https://${PENPOT_DOMAIN}/mcp/stream?userToken=${PENPOT_MCP_KEY}"
+      "url": "http://${PENPOT_LOCAL_HOST:-penpot.localhost}/mcp/stream?userToken=${PENPOT_LOCAL_KEY}"
+    },
+    "penpot-remote": {
+      "type": "streamable-http",
+      "url": "https://${PENPOT_REMOTE_DOMAIN:-design.penpot.app}/mcp/stream?userToken=${PENPOT_REMOTE_KEY}"
     }
   }
 }

@@ -25,10 +25,11 @@ Tools must be reachable. If not, run the `connection-setup` skill first.
 | `high_level_overview` | Fast summary of the currently focused page (good first call) |
 | `penpot_api_info` | Retrieve Penpot Plugin API documentation on demand |
 | `execute_code` | Run JavaScript in the Penpot plugin context (the main workhorse) |
-| `export_shape` | Export a shape as PNG/SVG for visual inspection (returned inline; no local-path export in remote mode) |
+| `export_shape` | Export a shape as PNG/SVG for visual inspection (returned inline as base64 data) |
 
-Tool names are namespaced by Kiro when the power is installed (e.g.
-`power-penpot-penpot-...`). Call them as exposed in your session.
+Tool names are namespaced by server profile when the power is active (e.g.
+`penpot-local:execute_code` vs `penpot-remote:execute_code`). Call the profile
+matching your target environment.
 
 ## Tip: One-Line Runtime Helper Suite (`storage.helpers`)
 

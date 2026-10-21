@@ -17,15 +17,13 @@ and vector methods inside `execute_code` (`penpot.createShapeFromSvg`,
 `penpot.uploadMediaUrl`, `penpot.uploadMediaData`, and the MCP helper
 `penpotUtils.importImage`) so the workspace agent can pass assets cleanly.
 
-> **Important API rules:**
-> - Do not rely on `fetch` inside `execute_code` to download assets. The plugin sandbox
->   does not permit arbitrary network fetches.
-> - Do not pass `http://localhost` or `http://127.0.0.1` URLs to
->   `penpot.uploadMediaUrl`. `uploadMediaUrl` runs on Penpot's hosted backend, so
->   loopback addresses cannot resolve your local machine.
-> - Base64 is strictly for tiny files (≤ 15 KB). Never attempt base64 chunking across
->   tool calls for large images. For files > 15 KB, use a public HTTPS URL via
->   `uploadMediaUrl` or the local MCP's `import_image` tool.
+## Anti-Patterns & Prohibited Actions
+
+- **Do not chunk SVGs:** Always pass complete SVG text to `penpot.createShapeFromSvg()` in a single `execute_code` call. Tool call arguments accept multi-megabyte payloads; do not split markup across calls or stage pieces in `storage`.
+- **Do not use `uploadMediaUrl` for SVGs:** It rasterizes vectors into flat image fills, discarding layers, strokes, and editable paths. Always use `penpot.createShapeFromSvg`.
+- **Do not use `uploadMediaUrl` with local/private addresses:** Penpot's backend enforces SSRF protection, rejecting `localhost`, `127.0.0.1`, `host.docker.internal`, and private subnets with `:ssrf-blocked-target`. Never start temporary local HTTP servers for media uploads.
+- **Do not use `fetch()` inside `execute_code`:** The plugin Web Worker sandbox disallows arbitrary network requests.
+- **Do not base64-encode raster images > 15 KB:** Use a public HTTPS URL with `uploadMediaUrl`, or generate downscaled previews via `node scripts/prepare-asset.mjs <file> --downscale`.
 
 Follow the decision tree below to import any asset reliably.
 
@@ -35,7 +33,7 @@ Follow the decision tree below to import any asset reliably.
 
 | Asset Type / Source | Best Method in `execute_code` |
 | --- | --- |
-| **1. Local `.svg` file** (icons, logos, illustrations) | Run `node scripts/prepare-asset.mjs <file.svg>` (or read text directly) and execute `penpot.createShapeFromSvg(svgString)` |
+| **1. Local `.svg` file** (icons, logos, illustrations of any size) | Read file text (or run `node scripts/prepare-asset.mjs <file.svg>`) and execute `penpot.createShapeFromSvg(svgString)` in **1 single call** |
 | **2. Raster image on GitHub / public HTTPS** (any size, even 5 MB+) | Resolve the public raw URL and call `await penpot.uploadMediaUrl(name, rawUrl)` — **0 base64 tokens!** |
 | **3. Small local raster image (`.png`, `.jpg`, `.webp`, `.gif`) ≤ 15 KB** | Run `node scripts/prepare-asset.mjs <file.png> --x=100 --y=100 --width=64` and execute the generated `penpotUtils.importImage(...)` snippet |
 | **4. Large local raster image (> 15 KB, private)** | **DO NOT CHUNK BASE64.** Use **Path A** (host on public HTTPS + `uploadMediaUrl`) or **Path B** (switch to local MCP with `import_image`). If only a low-res preview is needed on macOS, pass `--downscale` to `scripts/prepare-asset.mjs`. |
@@ -109,10 +107,13 @@ rect.fills = [{ fillOpacity: 1, fillImage: imgData }];
 return { id: rect.id, width: rect.width, height: rect.height, imageId: imgData.id };
 ```
 
-> **Note:** `penpot.uploadMediaUrl` runs on the Penpot server, so the URL must
-> be publicly reachable over HTTPS. Loopback addresses (`localhost`, `127.0.0.1`)
-> cannot resolve your machine. Files in a private repository return an error; if
-> the call fails, fall back to Method 3.
+> **Critical Warning — SSRF Protection:** `penpot.uploadMediaUrl` is executed by
+> the Penpot backend server (even in local Docker!), NOT by the browser or your shell.
+> The backend enforces strict SSRF protection that rejects loopback addresses (`localhost`,
+> `127.0.0.1`), Docker host gateways (`host.docker.internal`, `172.x`), and private LANs
+> with `:ssrf-blocked-target`. Never spin up temporary local HTTP servers for `uploadMediaUrl`.
+> The URL must be a public HTTPS endpoint (e.g. GitHub raw URL). For local files, always
+> use `penpot.createShapeFromSvg` (SVGs) or `penpotUtils.importImage` (raster).
 
 ---
 
