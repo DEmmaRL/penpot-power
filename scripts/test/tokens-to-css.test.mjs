@@ -56,10 +56,15 @@ test("output is deterministic and wrapped in :root by default", () => {
   assert.match(a, /:root \{\n/);
 });
 
-test("supports @theme wrapper for Tailwind v4", () => {
+test("supports @theme wrapper for Tailwind v4 with normalized namespaces", () => {
   const { css } = tokensToCss(sample, "tokens.json", { wrapper: "@theme" });
   assert.match(css, /@theme \{\n/);
   assert.match(css, /--color-brand-primary: #2563EB;/);
+  assert.match(css, /--text-2xl: 28px;/);
+  assert.match(css, /--font-body: "Atkinson Hyperlegible";/);
+  assert.match(css, /--font-weight-bold: 700;/);
+  assert.match(css, /--radius-full: 9999px;/);
+  assert.match(css, /--spacing-md: 16px;/);
 });
 
 test("tokensToTailwind produces valid Tailwind v3 configuration object", () => {
@@ -72,7 +77,7 @@ test("tokensToTailwind produces valid Tailwind v3 configuration object", () => {
   assert.deepEqual(theme.fontFamily["body"], ["Atkinson Hyperlegible"]);
 });
 
-test("parses standard W3C DTCG token format natively ($value, $type)", () => {
+test("parses standard W3C DTCG token format natively ($value, $type) including fontFamily, fontWeight, and dimension subtypes", () => {
   const dtcg = {
     color: {
       brand: {
@@ -84,18 +89,60 @@ test("parses standard W3C DTCG token format natively ($value, $type)", () => {
       }
     },
     spacing: {
-      lg: { $value: "24px", $type: "spacing" }
+      lg: { $value: "24", $type: "dimension", $extensions: { "app.penpot": { type: "spacing" } } }
+    },
+    radius: {
+      md: { $value: "8", $type: "dimension" }
+    },
+    font: {
+      size: {
+        xl: { $value: "20", $type: "dimension" }
+      },
+      family: {
+        sans: { $value: "Plus Jakarta Sans, sans-serif", $type: "fontFamily" }
+      },
+      weight: {
+        semibold: { $value: "600", $type: "fontWeight" }
+      }
     }
   };
-  const { css } = tokensToCss(dtcg);
+  const { css, skipped } = tokensToCss(dtcg);
+  assert.equal(skipped.length, 0);
   assert.match(css, /--color-brand-primary: #4F46E5;/);
   assert.match(css, /--color-text-body: #111827;/);
   assert.match(css, /--color-text-muted: var\(--color-text-body\);/);
   assert.match(css, /--spacing-lg: 24px;/);
+  assert.match(css, /--radius-md: 8px;/);
+  assert.match(css, /--font-size-xl: 20px;/);
+  assert.match(css, /--font-family-sans: "Plus Jakarta Sans", sans-serif;/);
+  assert.match(css, /--font-weight-semibold: 600;/);
 
   const { theme } = tokensToTailwind(dtcg);
   assert.equal(theme.colors["brand-primary"], "#4F46E5");
+  assert.equal(theme.colors["text-muted"], "#111827"); // resolved DTCG alias!
   assert.equal(theme.spacing["lg"], "24px");
+  assert.equal(theme.borderRadius["md"], "8px");
+  assert.equal(theme.fontSize["xl"], "20px");
+  assert.deepEqual(theme.fontFamily["sans"], ["Plus Jakarta Sans", "sans-serif"]);
+  assert.equal(theme.fontWeight["semibold"], "600");
+});
+
+test("supports tuple-based tokensByType and resolvedValueString from Penpot Plugin API", () => {
+  const tupleSets = {
+    sets: [
+      {
+        name: "Live-Plugin-Export",
+        active: true,
+        tokensByType: [
+          ["color", [{ name: "color.accent", value: "#10B981", resolvedValueString: "#10B981" }]],
+          ["borderRadius", [{ name: "radius.sm", value: null, resolvedValueString: "4" }]]
+        ]
+      }
+    ]
+  };
+  const { css } = tokensToCss(tupleSets);
+  assert.match(css, /--color-accent: #10B981;/);
+  assert.match(css, /--radius-sm: 4px;/);
 });
 
 test("rejects invalid input", () => {
