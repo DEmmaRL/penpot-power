@@ -143,8 +143,8 @@ filesystem (meaning the standalone `import_image` MCP tool is only registered on
 local MCP servers), this power's **`asset-and-token-sync`** skill bridges that
 gap using Penpot's official Plugin API inside `execute_code`:
 - **SVGs:** Read from your workspace and created via `penpot.createShapeFromSvg(svgString)`.
-- **GitHub / HTTPS images:** Imported at full resolution via `await penpot.uploadMediaUrl(name, url)`.
-- **Local PNG / JPEG / WebP files:** Encoded and uploaded via `await penpotUtils.importImage(base64, mimeType, name, x, y, width, height)`.
+- **GitHub / HTTPS images (any size):** Imported at full resolution via `await penpot.uploadMediaUrl(name, url)`.
+- **Small local PNG / JPEG / WebP previews (≤ 15 KB):** Encoded and uploaded via `await penpotUtils.importImage(base64, mimeType, name, x, y, width, height)`. For larger images, host them on public HTTPS or use the local MCP server with `import_image`.
 
 If you prefer running the local Penpot MCP daemon (`npx -y @penpot/mcp@latest`),
 see the [Penpot MCP Help Center](https://help.penpot.app/mcp/) and

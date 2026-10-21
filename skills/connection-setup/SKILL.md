@@ -27,10 +27,10 @@ Important facts (from Penpot's official docs):
   Only one tab can own MCP at a time.
 - Remote mode has no direct MCP server file-system access: `import_image` is not
   registered as an MCP tool, and `export_shape` returns image data inline rather
-  than writing to disk. **However, you CAN still send local workspace images and
-  SVGs to Penpot in remote mode** by calling `penpotUtils.importImage`,
-  `penpot.uploadMediaUrl`, or `penpot.createShapeFromSvg` inside `execute_code`
-  — see the `asset-and-token-sync` skill!
+  than writing to disk. **However, you CAN still send local workspace assets to
+  Penpot in remote mode:** SVGs via `penpot.createShapeFromSvg`, public raster images
+  via `penpot.uploadMediaUrl`, or tiny local raster previews (≤ 15 KB) via
+  `penpotUtils.importImage` inside `execute_code` — see `asset-and-token-sync`!
 
 ## Step 0: Diagnostic Healthcheck Probe
 

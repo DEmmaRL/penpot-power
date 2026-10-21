@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `mcp-remote` form is documented as a fallback in `README.md`.
 
 ### Fixed
+- `asset-and-token-sync`: removed base64 chunking dead-end; explicitly documented the two
+  real paths for large images (> 15 KB): public HTTPS URL (`uploadMediaUrl`) or local MCP (`import_image`).
 - `asset-and-token-sync`: token export uses `resolvedValueString` and groups by
   `tokensByType`, matching the Plugin API (`resolvedValue` and `Token.type` do not exist).
 - `asset-and-token-sync`: temporary files go in `$TMPDIR` instead of `/tmp`; the

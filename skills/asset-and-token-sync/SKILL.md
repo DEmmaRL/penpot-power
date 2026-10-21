@@ -18,16 +18,14 @@ and vector methods inside `execute_code` (`penpot.createShapeFromSvg`,
 `penpotUtils.importImage`) so the workspace agent can pass assets cleanly.
 
 > **Important API rules:**
-> - Do not rely on `fetch` inside `execute_code` to download assets. In our tests
->   it failed for every URL, including a public HTTPS one (Penpot session,
->   2026-10-20; cause not identified).
+> - Do not rely on `fetch` inside `execute_code` to download assets. The plugin sandbox
+>   does not permit arbitrary network fetches.
 > - Do not pass `http://localhost` or `http://127.0.0.1` URLs to
->   `penpot.uploadMediaUrl`. This is untested. Penpot's docs do not say where the
->   download runs, so a loopback address may not reach your machine.
-> - Base64 is for small files only. A 1.3 MB PNG is about 1.8 million base64
->   characters, which is impractical to pass through a tool call. Use base64 for
->   files of 15 KB or less, `uploadMediaUrl` with a public URL for larger ones, or
->   the local MCP's `import_image` tool.
+>   `penpot.uploadMediaUrl`. `uploadMediaUrl` runs on Penpot's hosted backend, so
+>   loopback addresses cannot resolve your local machine.
+> - Base64 is strictly for tiny files (≤ 15 KB). Never attempt base64 chunking across
+>   tool calls for large images. For files > 15 KB, use a public HTTPS URL via
+>   `uploadMediaUrl` or the local MCP's `import_image` tool.
 
 Follow the decision tree below to import any asset reliably.
 
@@ -38,9 +36,9 @@ Follow the decision tree below to import any asset reliably.
 | Asset Type / Source | Best Method in `execute_code` |
 | --- | --- |
 | **1. Local `.svg` file** (icons, logos, illustrations) | Read the `.svg` file as text in the workspace, then call `penpot.createShapeFromSvg(svgString)` |
-| **2. Local raster image inside a GitHub/public repo** (any size, even 5 MB+) | Resolve the public raw URL (`git remote get-url origin` + branch + path) and call `await penpot.uploadMediaUrl(name, rawUrl)` — **0 base64 tokens!** |
-| **3. Local raster image (`.png`, `.jpg`, `.webp`) ≤ 15 KB** | Base64-encode via shell (`base64 -i <file> \| tr -d '\n'`) and call `await penpotUtils.importImage(b64, mimeType, name, x, y, width, height)` |
-| **4. Large local-only raster image (> 15 KB, untracked/private)** | Downscale/compress to a temporary file in `$TMPDIR` first (`sips` / `ffmpeg` / `python3`), then send via `penpotUtils.importImage` (or chunk via `storage.b64 += ...`) |
+| **2. Raster image on GitHub / public HTTPS** (any size, even 5 MB+) | Resolve the public raw URL and call `await penpot.uploadMediaUrl(name, rawUrl)` — **0 base64 tokens!** |
+| **3. Small local raster image (`.png`, `.jpg`, `.webp`) ≤ 15 KB** | Base64-encode via shell (`base64 -i <file> \| tr -d '\n'`) and call `await penpotUtils.importImage(b64, mimeType, name, x, y, width, height)` |
+| **4. Large local raster image (> 15 KB, private)** | **DO NOT CHUNK BASE64.** Use **Path A** (host on public HTTPS + `uploadMediaUrl`) or **Path B** (switch to local MCP with `import_image`). If only a low-res preview is needed, downscale with `sips` to ≤ 15 KB first. |
 
 ---
 
@@ -155,23 +153,29 @@ penpotUtils.importImage(
    return { id: shape.id, name: shape.name, width: shape.width, height: shape.height };
    ```
 
-### Chunking larger base64 payloads across `execute_code` calls
+### Large Images (> 15 KB): Why Base64 Chunking Fails & The Two Real Paths
 
-If you must upload a larger uncompressed local asset (a base64 payload over ~20 KB) without
-truncating a single tool call, accumulate chunks in the persistent `storage`
-global:
+Do **NOT** attempt to chunk large base64 strings across multiple `execute_code` calls using `storage`. In live sessions, passing hundreds of thousands of base64 characters degrades the WebSocket transport, exhausts LLM context windows, and frequently causes connection drops.
 
-```javascript
-// Call 1:
-storage.imgB64 = "iVBORw0KGgoAAAANSUhEUgAA...";
-return { length: storage.imgB64.length };
+For any raster asset exceeding 15 KB, use one of the two real paths:
 
-// Call 2:
-storage.imgB64 += "moreBase64Characters...";
-const shape = await penpotUtils.importImage(storage.imgB64, "image/png", "asset.png", 0, 0);
-delete storage.imgB64;
-return { id: shape.id, width: shape.width, height: shape.height };
-```
+1. **Path A — Public HTTPS URL (Recommended for Remote MCP):**
+   Host or push the image to an HTTPS location you control (e.g. GitHub raw URL, S3 bucket, CDN), then call:
+   ```javascript
+   const imgData = await penpot.uploadMediaUrl("asset.png", "https://your-public-cdn.com/asset.png");
+   const rect = penpot.createRectangle();
+   rect.name = imgData.name;
+   rect.resize(imgData.width, imgData.height);
+   rect.fills = [{ fillOpacity: 1, fillImage: imgData }];
+   return { id: rect.id, width: rect.width, height: rect.height };
+   ```
+   *Advantage:* Penpot's backend downloads it directly at full resolution with **zero base64 payload**.
+
+2. **Path B — Local MCP Server (`@penpot/mcp`):**
+   If the image is private/untracked and cannot be hosted on a public URL, switch to the official local MCP server (`npx -y @penpot/mcp@latest`). The local MCP server has native filesystem access and registers the `import_image` tool, allowing direct high-resolution imports from your local disk.
+
+3. **Fallback — Local Canvas Preview (Downscaling):**
+   If only an approximate visual preview on the canvas is needed, downscale or compress the file in `$TMPDIR` using `sips` (`sips -Z 512 ...` or JPEG compression) so that the file size drops below 15 KB before base64 encoding.
 
 ---
 
