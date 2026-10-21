@@ -18,43 +18,52 @@ Arms A and B differ only in the power. Arm C differs in the MCP server too, so c
 
 Arm C runs the same tasks T01–T13 with the same prompts. Add a large-image task only as a separate, documented addition, because the fixture must be a real file you control.
 
-## Files
+## Files & Automation Scripts
 
 - `tasks.json`: 13 tasks. Each has a prompt and a verifier. Tasks T12 and T13 are controls not covered by any skill.
-- `schedule.mjs`: generates a seeded, reproducible run order.
+- `schedule.mjs`: generates a seeded, reproducible run order (`node evals/schedule.mjs > evals/out/schedule.csv`).
+- `../scripts/eval-harness.mjs`: automated fixture resetter, verifier runner, and Wilson 95% confidence interval analyzer:
+  - `node scripts/eval-harness.mjs setup` — outputs the `execute_code` JS snippet to remove stale `EVAL_*` shapes and recreate `EVAL_FIX_Board` and `EVAL_T12_old` on the current page in one step.
+  - `node scripts/eval-harness.mjs verify <T01..T13>` — runs shell verifiers directly (`T10`, `T11`) or outputs the `execute_code` verifier snippet for Penpot tasks.
+  - `node scripts/eval-harness.mjs stats <results.csv>` — calculates pass rates and **Wilson 95% confidence intervals** per arm, per category, and for control vs. treatment tasks.
 - `fixtures/`: `icon.svg` for T07 and `dot.png` (8×8, under 100 bytes) for T08.
 - `out/`: generated artifacts from runs. Git-ignored.
 
 ## Setup (once)
 
-1. Create the test file in Penpot. Add the required shapes from `tasks.json` → `fixtures.requiredShapes`: `EVAL_FIX_Board` (400×300, white, with three `#FF0000` rectangles) and `EVAL_T12_old`. Add a few other top-level boards so that T01 and T06 are meaningful.
+1. Create the test file in Penpot, or open an evaluation page and run `node scripts/eval-harness.mjs setup` inside `execute_code` to create `EVAL_FIX_Board` (400×300, white, with three `#FF0000` rectangles), `EVAL_T12_old`, and `Baseline_Screen`.
 2. Host a public PNG under 1 MB, and put its HTTPS URL in place of `<PUBLIC_PNG_URL>` in `tasks.json`. T09 needs it.
-3. Save the file as the untouched original. Never run tasks on it.
+3. Save the file as the untouched original (or use `node scripts/eval-harness.mjs setup` between runs to reset fixtures cleanly).
 4. Record the Kiro version, the model, and the Penpot MCP endpoint in your run log.
 
 ## Per run
 
-1. Duplicate the original file and open the duplicate. Confirm it is connected: File → MCP Server → Connect.
+1. Reset the page fixtures (`node scripts/eval-harness.mjs setup` via `execute_code`) or duplicate the untouched original file. Confirm it is connected: **File → MCP Server → Connect**.
 2. Open a new Kiro chat for that run. Do not reuse chats.
 3. Arm A: make sure the power is not installed and no steering from this repo is loaded. Arm B: install the power and confirm its tools are listed.
 4. Paste the task prompt exactly as written. Do not add hints.
-5. When the agent says it is done, run the task's verifier against the duplicate file. Record `pass` and `detail`.
-6. Log the run: `order, rep, task, arm, pass, execute_code_calls, execute_code_errors, seconds, human_intervention (yes/no)`.
-7. Delete the duplicate file.
+5. When the agent says it is done, run the task's verifier (`node scripts/eval-harness.mjs verify <taskId>`). Record `pass` and `detail`.
+6. Log the run in `evals/out/results.csv`: `order,rep,task,arm,pass,execute_code_calls,execute_code_errors,seconds,human_intervention`.
 
 If the MCP connection drops during a run, log it and repeat that run later. Do not count it as a failure.
 
 ## Verifiers
 
-- `type: penpot` verifiers run in the Penpot plugin context. Run them with `execute_code` on the duplicate file. They rely on `penpotUtils` helpers. That namespace is not in the public Plugin API docs, so check it works before the first real run.
-- `type: shell` verifiers run from the repo root against the files in `evals/out/`.
+- `type: penpot` verifiers run in the Penpot plugin context. Run them with `execute_code` on the evaluation page. They rely on `penpotUtils` helpers. That namespace is not in the public Plugin API docs, so check it works before the first real run.
+- `type: shell` verifiers run from the repo root against the files in `evals/out/` (or via `node scripts/eval-harness.mjs verify T10`).
 
 Verifiers do not judge answers, so the grader does not need to know the arm.
 
 ## Analysis
 
-- Success rate per arm, per category, and for the controls. Report each separately.
-- Use Wilson 95% intervals. With 5 runs per task, a single task's difference is not conclusive. Look at the pooled result per category.
+Run the statistical analyzer against your completed CSV log:
+
+```bash
+node scripts/eval-harness.mjs stats evals/out/results.csv
+```
+
+- Reports success rate per arm, per category, and for controls vs. treatment tasks separately.
+- Uses **Wilson 95% confidence intervals**. With 5 runs per task, a single task's difference is not conclusive; look at the pooled result per category.
 - Report every run, including failures and dropped connections.
 
 ## Known biases
