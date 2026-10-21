@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseCssTokens, cssToDtcg, tokensToPenpotScript } from "../css-to-tokens.mjs";
+import { parseCssTokens, cssToDtcg, tokensToPenpotScript, resolveTokenCollisions } from "../css-to-tokens.mjs";
 import { tokensToCss } from "../tokens-to-css.mjs";
 
 const sampleCss = `
@@ -107,4 +107,127 @@ test("tokensToPenpotScript generates runnable execute_code JS that upserts token
 
 test("rejects CSS without custom properties", () => {
   assert.throws(() => parseCssTokens("body { color: red; }"), /No CSS custom properties/);
+});
+
+test("parseCssTokens automatically resolves leaf-vs-branch prefix collisions", () => {
+  const collidingCss = `
+    :root {
+      --color-primary: #2563EB;
+      --color-primary-hover: #1D4ED8;
+      --color-primary-active: #1E40AF;
+      --color-text: #0F172A;
+      --color-text-muted: #64748B;
+      --btn-bg: var(--color-primary);
+      --font-size-3xl: 30px;
+      --font-size-3xl-5: 34px;
+    }
+  `;
+  const tokens = parseCssTokens(collidingCss);
+  assert.equal(tokens.length, 8);
+
+  const primaryBase = tokens.find(t => t.name === "color.primary.base");
+  assert.ok(primaryBase, "color.primary should be renamed to color.primary.base");
+  assert.equal(primaryBase.value, "#2563EB");
+
+  const primaryHover = tokens.find(t => t.name === "color.primary.hover");
+  assert.ok(primaryHover);
+  assert.equal(primaryHover.value, "#1D4ED8");
+
+  const textBase = tokens.find(t => t.name === "color.text.base");
+  assert.ok(textBase, "color.text should be renamed to color.text.base");
+  assert.equal(textBase.value, "#0F172A");
+
+  const textMuted = tokens.find(t => t.name === "color.text.muted");
+  assert.ok(textMuted);
+
+  const btnBg = tokens.find(t => t.name === "btn.bg");
+  assert.ok(btnBg);
+  assert.equal(btnBg.value, "{color.primary.base}", "Alias should resolve to the renamed .base token");
+
+  const fontSize3xlBase = tokens.find(t => t.name === "font.size.3xl.base");
+  assert.ok(fontSize3xlBase, "font.size.3xl should be renamed to font.size.3xl.base");
+  assert.equal(fontSize3xlBase.value, "30px");
+
+  const fontSize3xl5 = tokens.find(t => t.name === "font.size.3xl.5");
+  assert.ok(fontSize3xl5);
+  assert.equal(fontSize3xl5.value, "34px");
+
+  // DTCG export should not clobber branch nodes
+  const { dtcg } = cssToDtcg(collidingCss);
+  assert.equal(dtcg.color.primary.base.$value, "#2563EB");
+  assert.equal(dtcg.color.primary.hover.$value, "#1D4ED8");
+  assert.equal(dtcg.color.text.base.$value, "#0F172A");
+  assert.equal(dtcg.color.text.muted.$value, "#64748B");
+});
+
+test("resolveTokenCollisions handles fallback when .base already exists", () => {
+  const input = [
+    { name: "color.brand", value: "#111111", type: "color" },
+    { name: "color.brand.base", value: "#222222", type: "color" },
+    { name: "color.brand.hover", value: "#333333", type: "color" }
+  ];
+  const resolved = resolveTokenCollisions(input);
+  const renamed = resolved.find(t => t.name.startsWith("color.brand.default"));
+  assert.ok(renamed, "Should fall back to .default when .base already exists");
+  assert.equal(renamed.value, "#111111");
+});
+
+test("tokensToPenpotScript removes stale conflicting tokens in Penpot runtime", () => {
+  const collidingCss = `
+    :root {
+      --color-primary: #2563EB;
+      --color-primary-hover: #1D4ED8;
+    }
+  `;
+  const { code } = tokensToPenpotScript(collidingCss, { setName: "Clean Test" });
+
+  const removed = [];
+  const added = [];
+  const staleToken = {
+    name: "color.primary",
+    value: "#000000",
+    remove() {
+      removed.push(this.name);
+      const idx = mockSet.tokens.indexOf(this);
+      if (idx !== -1) mockSet.tokens.splice(idx, 1);
+    }
+  };
+
+  const mockSet = {
+    name: "Clean Test",
+    active: true,
+    tokens: [staleToken],
+    toggleActive() {},
+    addToken(tok) {
+      added.push(tok);
+      this.tokens.push(tok);
+      return tok;
+    }
+  };
+
+  const mockPenpot = {
+    currentPage: { id: "page-1", name: "Home" },
+    library: {
+      local: {
+        tokens: {
+          sets: [mockSet],
+          addSet(s) {
+            this.sets.push(s);
+            return s;
+          }
+        }
+      }
+    }
+  };
+
+  const fn = new Function("penpot", code);
+  const result = fn(mockPenpot);
+
+  assert.equal(result.removed, 1, "Should report 1 stale conflicting token removed");
+  assert.deepEqual(removed, ["color.primary"]);
+  assert.equal(result.created, 2);
+  assert.deepEqual(
+    mockSet.tokens.map(t => t.name),
+    ["color.primary.base", "color.primary.hover"]
+  );
 });

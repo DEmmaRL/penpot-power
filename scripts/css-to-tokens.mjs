@@ -99,7 +99,61 @@ function normalizeValue(rawValue, penpotType, propMap) {
   return trimmed;
 }
 
-export function parseCssTokens(cssText) {
+export function findAvailableName(baseName, existingNames, suffix = "base") {
+  let candidate = `${baseName}.${suffix}`;
+  if (!existingNames.has(candidate)) return candidate;
+  candidate = `${baseName}.default`;
+  if (!existingNames.has(candidate)) return candidate;
+  let counter = 1;
+  while (existingNames.has(`${baseName}.${suffix}-${counter}`)) {
+    counter++;
+  }
+  return `${baseName}.${suffix}-${counter}`;
+}
+
+export function resolveTokenCollisions(tokens, options = {}) {
+  const { suffix = "base" } = options;
+  if (!Array.isArray(tokens) || tokens.length === 0) return tokens;
+
+  const names = new Set(tokens.map(t => t.name));
+  const renames = new Map();
+
+  for (const name of names) {
+    const prefix = name + ".";
+    for (const other of names) {
+      if (other.startsWith(prefix)) {
+        const newName = findAvailableName(name, names, suffix);
+        renames.set(name, newName);
+        names.add(newName);
+        break;
+      }
+    }
+  }
+
+  if (renames.size === 0) return tokens;
+
+  return tokens.map(t => {
+    let name = t.name;
+    if (renames.has(name)) {
+      name = renames.get(name);
+    }
+    let value = t.value;
+    if (typeof value === "string") {
+      for (const [oldName, newName] of renames) {
+        if (value.includes(`{${oldName}}`)) {
+          value = value.replaceAll(`{${oldName}}`, `{${newName}}`);
+        }
+      }
+    }
+    return {
+      ...t,
+      name,
+      value
+    };
+  });
+}
+
+export function parseCssTokens(cssText, options = {}) {
   if (typeof cssText !== "string") {
     throw new Error("CSS input must be a string.");
   }
@@ -122,9 +176,44 @@ export function parseCssTokens(cssText) {
     throw new Error("No CSS custom properties (--*) found in input.");
   }
 
+  // Detect and resolve hierarchical prefix collisions (leaf vs branch nodes).
+  // In Penpot and DTCG, token paths use dot notation. If "color.primary" and "color.primary.hover"
+  // both exist, "color.primary" cannot simultaneously be a leaf value and a branch container.
+  // We resolve this by appending a suffix (default: ".base") to the parent node.
+  const allNames = new Set(rawDecls.map(d => d.tokenName));
+  const collisionRenames = new Map();
+  for (const name of allNames) {
+    const prefix = name + ".";
+    for (const other of allNames) {
+      if (other.startsWith(prefix)) {
+        const newName = findAvailableName(name, allNames, options.suffix || "base");
+        collisionRenames.set(name, newName);
+        allNames.add(newName);
+        break;
+      }
+    }
+  }
+
+  if (collisionRenames.size > 0) {
+    for (const d of rawDecls) {
+      if (collisionRenames.has(d.tokenName)) {
+        const newName = collisionRenames.get(d.tokenName);
+        d.tokenName = newName;
+        propMap.set(d.prop, newName);
+      }
+    }
+  }
+
   const byName = new Map();
   for (const d of rawDecls) {
-    const value = normalizeValue(d.rawVal, d.penpotType, propMap);
+    let value = normalizeValue(d.rawVal, d.penpotType, propMap);
+    if (typeof value === "string") {
+      for (const [oldName, newName] of collisionRenames) {
+        if (value.includes(`{${oldName}}`)) {
+          value = value.replaceAll(`{${oldName}}`, `{${newName}}`);
+        }
+      }
+    }
     byName.set(d.tokenName, {
       name: d.tokenName,
       value,
@@ -181,17 +270,17 @@ function penpotValueString(token) {
 }
 
 export function tokensToPenpotScript(input, options = {}) {
-  const { setName = "Project Tokens" } = options;
+  const { setName = "Project Tokens", suffix = "base" } = options;
   let tokens;
   if (typeof input === "string") {
     const trimmed = input.trim();
     if (trimmed.startsWith("{")) {
-      tokens = extractTokens(JSON.parse(trimmed));
+      tokens = resolveTokenCollisions(extractTokens(JSON.parse(trimmed)), { suffix });
     } else {
-      tokens = parseCssTokens(trimmed);
+      tokens = parseCssTokens(trimmed, { suffix });
     }
   } else if (input && typeof input === "object") {
-    tokens = extractTokens(input);
+    tokens = resolveTokenCollisions(extractTokens(input), { suffix });
   } else {
     throw new Error("Input must be a CSS string or valid token JSON object.");
   }
@@ -210,7 +299,18 @@ export function tokensToPenpotScript(input, options = {}) {
     `if (!set) set = catalog.addSet({ name: setName });`,
     `if (!set.active) set.toggleActive();`,
     `const incoming = ${JSON.stringify(payload, null, 2)};`,
-    `let created = 0, updated = 0;`,
+    `let created = 0, updated = 0, removed = 0;`,
+    `const incomingNames = new Set(incoming.map(t => t.name));`,
+    `for (const existing of [...(set.tokens || [])]) {`,
+    `  if (!incomingNames.has(existing.name)) {`,
+    `    const isPrefix = incoming.some(item => item.name.startsWith(existing.name + "."));`,
+    `    const isChild = incoming.some(item => existing.name.startsWith(item.name + "."));`,
+    `    if (isPrefix || isChild) {`,
+    `      if (typeof existing.remove === "function") existing.remove();`,
+    `      removed++;`,
+    `    }`,
+    `  }`,
+    `}`,
     `const existingByName = new Map((set.tokens || []).map(t => [t.name, t]));`,
     `for (const item of incoming) {`,
     `  const found = existingByName.get(item.name);`,
@@ -222,7 +322,7 @@ export function tokensToPenpotScript(input, options = {}) {
     `    created++;`,
     `  }`,
     `}`,
-    `return { set: set.name, active: set.active, total: incoming.length, created, updated };`
+    `return { set: set.name, active: set.active, total: incoming.length, created, updated, removed };`
   ].join("\n");
 
   return { code, count: payload.length, tokens: payload };
@@ -251,7 +351,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error(`Generated Penpot execute_code script for ${count} token(s) in set "${setName}".`);
   } else {
     const isJson = inputPath.endsWith(".json") || rawText.trim().startsWith("{");
-    const tokens = isJson ? extractTokens(JSON.parse(rawText)) : parseCssTokens(rawText);
+    const tokens = isJson ? resolveTokenCollisions(extractTokens(JSON.parse(rawText))) : parseCssTokens(rawText);
     const dtcg = tokensToDtcgObject(tokens);
     const jsonOut = JSON.stringify(dtcg, null, 2) + "\n";
     if (outputPath) writeFileSync(outputPath, jsonOut);
