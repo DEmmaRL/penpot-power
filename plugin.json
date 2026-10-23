@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Design, inspect, sync local assets/tokens, and generate code from Penpot files using the official Penpot MCP server. Covers remote-compatible image/SVG upload, design-system discovery, UI/UX creation, and design-to-code workflows.",
   "author": {
-    "name": "Diego Rivera"
+    "name": "Lon Rivera"
   },
   "keywords": [
     "penpot",

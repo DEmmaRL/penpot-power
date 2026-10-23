@@ -33,7 +33,7 @@ loading only the relevant skill and tools:
 
 ## Deterministic CLI Scripts (`scripts/`)
 
-All scripts run on Node.js ≥ 18 with **zero external npm dependencies** and are covered by 32 automated unit tests (`npm test`):
+All scripts run on Node.js ≥ 18 with **zero external npm dependencies** and are covered by 38 automated unit tests (`npm test`):
 
 | Script | Purpose |
 | --- | --- |
@@ -108,6 +108,8 @@ A common question is: *"Why use this power if Penpot already provides an MCP ser
 - **`penpot-remote`**:
   - `PENPOT_REMOTE_DOMAIN` — `design.penpot.app` (or your remote self-hosted domain).
   - `PENPOT_REMOTE_KEY` — personal `userToken` from **Integrations → MCP Server**.
+
+*(Note: If you only work in one environment—such as Penpot Cloud or Local Docker—you only need to use that profile. It is normal for the unused profile to appear disconnected in the MCP panel).*
 
 > **Alternative (User-Scope MCP Config):** If your client environment does not
 > expand placeholders inside `mcp.json`, add the servers directly to your

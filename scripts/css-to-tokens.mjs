@@ -25,50 +25,66 @@ const DTCG_TYPE_MAP = {
   number: "number"
 };
 
+export function smartDotSplit(str) {
+  const parts = String(str).split("-").filter(Boolean);
+  const out = [];
+  for (const part of parts) {
+    const prev = out[out.length - 1];
+    // Keep hyphen intact when a scale/numeric token (starting with a digit, e.g. "3xl", "2xl", "1")
+    // is followed by a fractional/sub-step number (e.g. "3xl-5", "1-5"), avoiding bogus ".5" folders.
+    if (prev && /^\d/.test(prev) && /^\d+$/.test(part)) {
+      out[out.length - 1] = `${prev}-${part}`;
+    } else {
+      out.push(part);
+    }
+  }
+  return out.join(".");
+}
+
 export function propToTokenMeta(propName, rawValue) {
   const cleanProp = propName.replace(/^--+/, "").trim().toLowerCase();
   const val = rawValue.trim();
 
   let penpotType = "dimension";
-  let tokenName = cleanProp.replace(/-/g, ".");
+  let tokenName = smartDotSplit(cleanProp);
 
   if (cleanProp.startsWith("color-")) {
     penpotType = "color";
-    const rest = cleanProp.slice("color-".length).replace(/-/g, ".");
+    const rest = smartDotSplit(cleanProp.slice("color-".length));
     tokenName = `color.${rest}`;
   } else if (cleanProp.startsWith("font-size-") || cleanProp.startsWith("text-")) {
     const rest = cleanProp.replace(/^(font-size|text)-/, "");
     // Distinguish Tailwind v4 --text-* font sizes vs --text-* colors
     if (/^#[0-9a-f]{3,8}$/i.test(val) || /^rgba?\(|^hsla?\(|^oklch\(/i.test(val) || /^var\(--color-/.test(val)) {
       penpotType = "color";
-      tokenName = `color.text.${rest.replace(/-/g, ".")}`;
+      tokenName = `color.text.${smartDotSplit(rest)}`;
     } else {
       penpotType = "fontSizes";
-      tokenName = `font.size.${rest.replace(/-/g, ".")}`;
+      tokenName = `font.size.${smartDotSplit(rest)}`;
     }
   } else if (cleanProp.startsWith("font-weight-")) {
     penpotType = "fontWeights";
-    const rest = cleanProp.slice("font-weight-".length).replace(/-/g, ".");
+    const rest = smartDotSplit(cleanProp.slice("font-weight-".length));
     tokenName = `font.weight.${rest}`;
   } else if (cleanProp.startsWith("font-family-") || cleanProp.startsWith("font-")) {
     penpotType = "fontFamilies";
-    const rest = cleanProp.replace(/^(font-family|font)-/, "").replace(/-/g, ".");
+    const rest = smartDotSplit(cleanProp.replace(/^(font-family|font)-/, ""));
     tokenName = `font.family.${rest}`;
   } else if (cleanProp.startsWith("radius-") || cleanProp.startsWith("border-radius-")) {
     penpotType = "borderRadius";
-    const rest = cleanProp.replace(/^(border-radius|radius)-/, "").replace(/-/g, ".");
+    const rest = smartDotSplit(cleanProp.replace(/^(border-radius|radius)-/, ""));
     tokenName = `radius.${rest}`;
   } else if (cleanProp.startsWith("spacing-") || cleanProp.startsWith("space-")) {
     penpotType = "spacing";
-    const rest = cleanProp.replace(/^(spacing|space)-/, "").replace(/-/g, ".");
+    const rest = smartDotSplit(cleanProp.replace(/^(spacing|space)-/, ""));
     tokenName = `spacing.${rest}`;
   } else if (cleanProp.startsWith("sizing-") || cleanProp.startsWith("size-")) {
     penpotType = "sizing";
-    const rest = cleanProp.replace(/^(sizing|size)-/, "").replace(/-/g, ".");
+    const rest = smartDotSplit(cleanProp.replace(/^(sizing|size)-/, ""));
     tokenName = `sizing.${rest}`;
   } else if (cleanProp.startsWith("opacity-")) {
     penpotType = "opacity";
-    const rest = cleanProp.slice("opacity-".length).replace(/-/g, ".");
+    const rest = smartDotSplit(cleanProp.slice("opacity-".length));
     tokenName = `opacity.${rest}`;
   } else if (/^#[0-9a-f]{3,8}$/i.test(val) || /^rgba?\(|^hsla?\(|^oklch\(/i.test(val)) {
     penpotType = "color";
@@ -99,13 +115,22 @@ function normalizeValue(rawValue, penpotType, propMap) {
   return trimmed;
 }
 
+function isNameOrPrefixTaken(candidate, existingNames) {
+  if (existingNames.has(candidate)) return true;
+  const prefix = candidate + ".";
+  for (const n of existingNames) {
+    if (n.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
 export function findAvailableName(baseName, existingNames, suffix = "base") {
   let candidate = `${baseName}.${suffix}`;
-  if (!existingNames.has(candidate)) return candidate;
+  if (!isNameOrPrefixTaken(candidate, existingNames)) return candidate;
   candidate = `${baseName}.default`;
-  if (!existingNames.has(candidate)) return candidate;
+  if (!isNameOrPrefixTaken(candidate, existingNames)) return candidate;
   let counter = 1;
-  while (existingNames.has(`${baseName}.${suffix}-${counter}`)) {
+  while (isNameOrPrefixTaken(`${baseName}.${suffix}-${counter}`, existingNames)) {
     counter++;
   }
   return `${baseName}.${suffix}-${counter}`;
@@ -116,11 +141,12 @@ export function resolveTokenCollisions(tokens, options = {}) {
   if (!Array.isArray(tokens) || tokens.length === 0) return tokens;
 
   const names = new Set(tokens.map(t => t.name));
+  const originalNames = [...names];
   const renames = new Map();
 
-  for (const name of names) {
+  for (const name of originalNames) {
     const prefix = name + ".";
-    for (const other of names) {
+    for (const other of originalNames) {
       if (other.startsWith(prefix)) {
         const newName = findAvailableName(name, names, suffix);
         renames.set(name, newName);
@@ -133,10 +159,9 @@ export function resolveTokenCollisions(tokens, options = {}) {
   if (renames.size === 0) return tokens;
 
   return tokens.map(t => {
-    let name = t.name;
-    if (renames.has(name)) {
-      name = renames.get(name);
-    }
+    const isRenamed = renames.has(t.name);
+    const name = isRenamed ? renames.get(t.name) : t.name;
+    const originalName = isRenamed ? (t.originalName || t.name) : (t.originalName || null);
     let value = t.value;
     if (typeof value === "string") {
       for (const [oldName, newName] of renames) {
@@ -148,6 +173,7 @@ export function resolveTokenCollisions(tokens, options = {}) {
     return {
       ...t,
       name,
+      ...(originalName ? { originalName } : {}),
       value
     };
   });
@@ -176,44 +202,9 @@ export function parseCssTokens(cssText, options = {}) {
     throw new Error("No CSS custom properties (--*) found in input.");
   }
 
-  // Detect and resolve hierarchical prefix collisions (leaf vs branch nodes).
-  // In Penpot and DTCG, token paths use dot notation. If "color.primary" and "color.primary.hover"
-  // both exist, "color.primary" cannot simultaneously be a leaf value and a branch container.
-  // We resolve this by appending a suffix (default: ".base") to the parent node.
-  const allNames = new Set(rawDecls.map(d => d.tokenName));
-  const collisionRenames = new Map();
-  for (const name of allNames) {
-    const prefix = name + ".";
-    for (const other of allNames) {
-      if (other.startsWith(prefix)) {
-        const newName = findAvailableName(name, allNames, options.suffix || "base");
-        collisionRenames.set(name, newName);
-        allNames.add(newName);
-        break;
-      }
-    }
-  }
-
-  if (collisionRenames.size > 0) {
-    for (const d of rawDecls) {
-      if (collisionRenames.has(d.tokenName)) {
-        const newName = collisionRenames.get(d.tokenName);
-        d.tokenName = newName;
-        propMap.set(d.prop, newName);
-      }
-    }
-  }
-
   const byName = new Map();
   for (const d of rawDecls) {
-    let value = normalizeValue(d.rawVal, d.penpotType, propMap);
-    if (typeof value === "string") {
-      for (const [oldName, newName] of collisionRenames) {
-        if (value.includes(`{${oldName}}`)) {
-          value = value.replaceAll(`{${oldName}}`, `{${newName}}`);
-        }
-      }
-    }
+    const value = normalizeValue(d.rawVal, d.penpotType, propMap);
     byName.set(d.tokenName, {
       name: d.tokenName,
       value,
@@ -221,7 +212,9 @@ export function parseCssTokens(cssText, options = {}) {
       dtcgType: d.dtcgType
     });
   }
-  return [...byName.values()];
+
+  // Detect and resolve hierarchical prefix collisions (leaf vs branch nodes)
+  return resolveTokenCollisions([...byName.values()], options);
 }
 
 export function tokensToDtcgObject(tokens) {
@@ -241,8 +234,11 @@ export function tokensToDtcgObject(tokens) {
       $value: t.value,
       $type: dtcgType
     };
-    if (t.type && t.type !== dtcgType) {
-      entry.$extensions = { "app.penpot": { type: t.type } };
+    const penpotMeta = {};
+    if (t.type && t.type !== dtcgType) penpotMeta.type = t.type;
+    if (t.originalName && t.originalName !== t.name) penpotMeta.originalName = t.originalName;
+    if (Object.keys(penpotMeta).length > 0) {
+      entry.$extensions = { "app.penpot": penpotMeta };
     }
     curr[leaf] = entry;
   }
@@ -288,6 +284,7 @@ export function tokensToPenpotScript(input, options = {}) {
   const payload = tokens.map(t => ({
     type: t.type === "fontSize" ? "fontSizes" : t.type === "fontFamily" ? "fontFamilies" : t.type === "fontWeight" ? "fontWeights" : t.type,
     name: t.name,
+    ...(t.originalName ? { originalName: t.originalName } : {}),
     value: penpotValueString(t)
   }));
 
@@ -301,24 +298,42 @@ export function tokensToPenpotScript(input, options = {}) {
     `const incoming = ${JSON.stringify(payload, null, 2)};`,
     `let created = 0, updated = 0, removed = 0;`,
     `const incomingNames = new Set(incoming.map(t => t.name));`,
+    `const renameMap = new Map(incoming.filter(t => t.originalName).map(t => [t.originalName, t.name]));`,
+    `const removedNames = new Set();`,
     `for (const existing of [...(set.tokens || [])]) {`,
     `  if (!incomingNames.has(existing.name)) {`,
     `    const isPrefix = incoming.some(item => item.name.startsWith(existing.name + "."));`,
     `    const isChild = incoming.some(item => existing.name.startsWith(item.name + "."));`,
     `    if (isPrefix || isChild) {`,
-    `      if (typeof existing.remove === "function") existing.remove();`,
-    `      removed++;`,
+    `      if (typeof existing.remove === "function") {`,
+    `        existing.remove();`,
+    `        removedNames.add(existing.name);`,
+    `        removed++;`,
+    `      }`,
     `    }`,
     `  }`,
     `}`,
-    `const existingByName = new Map((set.tokens || []).map(t => [t.name, t]));`,
+    `const activeTokens = (set.tokens || []).filter(t => !removedNames.has(t.name));`,
+    `// Heal any pre-existing token aliases that pointed to a promoted prefix token`,
+    `if (renameMap.size > 0) {`,
+    `  for (const tok of activeTokens) {`,
+    `    if (typeof tok.value === "string") {`,
+    `      for (const [oldName, newName] of renameMap) {`,
+    `        if (tok.value.includes("{" + oldName + "}")) {`,
+    `          tok.value = tok.value.replaceAll("{" + oldName + "}", "{" + newName + "}");`,
+    `        }`,
+    `      }`,
+    `    }`,
+    `  }`,
+    `}`,
+    `const existingByName = new Map(activeTokens.map(t => [t.name, t]));`,
     `for (const item of incoming) {`,
     `  const found = existingByName.get(item.name);`,
     `  if (found && typeof found === "object" && "value" in found) {`,
     `    found.value = item.value;`,
     `    updated++;`,
     `  } else {`,
-    `    set.addToken(item);`,
+    `    set.addToken({ type: item.type, name: item.name, value: item.value });`,
     `    created++;`,
     `  }`,
     `}`,

@@ -6,6 +6,8 @@
 // - Only active sets are used. When a name exists in several active sets, the later set wins
 //   (this matches Penpot's precedence: the order in the catalog defines it).
 // - Token names become custom properties: "color.brand.primary" -> "--color-brand-primary".
+// - Leaf collision suffixes (".base" or explicit originalName metadata) round-trip cleanly back
+//   to their canonical CSS variable names ("color.primary.base" -> "--color-primary").
 // - In --theme mode (Tailwind v4), variable names are normalized to Tailwind v4 @theme namespaces
 //   (--color-*, --text-*, --font-*, --font-weight-*, --radius-*, --spacing-*).
 // - Alias values ("{group.name}") become var(--group-name) references in CSS and are resolved in Tailwind v3.
@@ -34,9 +36,15 @@ const PASS_THROUGH = new Set([
 ]);
 const ALIAS = /^\{([^}]+)\}$/;
 
+export function canonicalTokenName(tokenName, originalName = null) {
+  if (originalName) return originalName;
+  return String(tokenName).replace(/\.base$/i, "");
+}
+
 export function cssName(tokenName, options = {}) {
-  const { theme = false, type = null } = options;
-  const slug = tokenName.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+  const { theme = false, type = null, originalName = null } = options;
+  const effectiveName = canonicalTokenName(tokenName, originalName);
+  const slug = effectiveName.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
   if (!theme) {
     return "--" + slug;
   }
@@ -76,12 +84,14 @@ function formatFontFamilyList(list) {
 }
 
 function cssValue(token, type, options = {}) {
-  const { theme = false, tokenTypeMap = new Map() } = options;
+  const { theme = false, tokenMetaMap = new Map() } = options;
   const raw = token.value;
   if (typeof raw === "string" && ALIAS.test(raw)) {
     const targetName = raw.match(ALIAS)[1];
-    const targetType = tokenTypeMap.get(targetName) || type;
-    return { value: `var(${cssName(targetName, { theme, type: targetType })})` };
+    const targetMeta = tokenMetaMap.get(targetName);
+    const targetType = targetMeta?.type || type;
+    const targetOrig = targetMeta?.originalName || null;
+    return { value: `var(${cssName(targetName, { theme, type: targetType, originalName: targetOrig })})` };
   }
   if (type === "fontFamilies" || type === "fontFamily") {
     if (Array.isArray(raw) && raw.length > 0) {
@@ -125,13 +135,13 @@ export function extractDtcgTokens(node, path = [], inheritedType = null) {
   // Check if this node is a leaf token
   if ("$value" in node || "value" in node) {
     const rawVal = node.$value !== undefined ? node.$value : node.value;
-    const extType =
-      node.$extensions?.["app.penpot"]?.type ||
-      node.$extensions?.penpot?.type ||
-      null;
+    const penpotExt = node.$extensions?.["app.penpot"] || node.$extensions?.penpot || null;
+    const extType = penpotExt?.type || null;
+    const originalName = penpotExt?.originalName || null;
     const effectiveType = inferDimensionSubtype(path, currentType, extType);
     tokens.push({
       name: path.join("."),
+      originalName,
       value: rawVal,
       resolvedValue: node.resolvedValue ?? node.resolvedValueString,
       type: effectiveType,
@@ -182,6 +192,7 @@ export function extractTokens(data) {
           const resolved = token.resolvedValue ?? token.resolvedValueString;
           byName.set(token.name, {
             name: token.name,
+            originalName: token.originalName || null,
             value: token.value ?? resolved,
             resolvedValue: resolved,
             type: group.type,
@@ -207,7 +218,7 @@ function resolveAliasValue(token, tokenMap, visited = new Set()) {
     }
     const targetName = raw.match(ALIAS)[1];
     if (visited.has(targetName)) return raw;
-    const target = tokenMap.get(targetName);
+    const target = tokenMap.get(targetName) || tokenMap.get(`${targetName}.base`);
     if (!target) return raw;
     visited.add(targetName);
     return resolveAliasValue(target, tokenMap, visited);
@@ -219,16 +230,24 @@ export function tokensToCss(data, sourceName = "tokens.json", options = {}) {
   const { wrapper = ":root" } = options;
   const isTheme = wrapper === "@theme";
   const rawTokens = extractTokens(data);
-  const tokenTypeMap = new Map(rawTokens.map(t => [t.name, t.type]));
+  const tokenMetaMap = new Map();
+  for (const t of rawTokens) {
+    tokenMetaMap.set(t.name, t);
+    if (t.originalName) tokenMetaMap.set(t.originalName, t);
+  }
   const byName = new Map();
   const skipped = [];
   for (const token of rawTokens) {
-    const result = cssValue(token, token.type, { theme: isTheme, tokenTypeMap });
+    const result = cssValue(token, token.type, { theme: isTheme, tokenMetaMap });
     if (result.skip) {
       skipped.push(`${token.name} (${result.skip})`);
       continue;
     }
-    const propName = cssName(token.name, { theme: isTheme, type: token.type });
+    const propName = cssName(token.name, {
+      theme: isTheme,
+      type: token.type,
+      originalName: token.originalName
+    });
     byName.set(propName, { name: propName, value: result.value });
   }
   const entries = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -244,7 +263,11 @@ export function tokensToCss(data, sourceName = "tokens.json", options = {}) {
 
 export function tokensToTailwind(data, sourceName = "tokens.json") {
   const rawTokens = extractTokens(data);
-  const tokenMap = new Map(rawTokens.map(t => [t.name, t]));
+  const tokenMap = new Map();
+  for (const t of rawTokens) {
+    tokenMap.set(t.name, t);
+    if (t.originalName) tokenMap.set(t.originalName, t);
+  }
   const theme = {
     colors: {},
     spacing: {},
@@ -257,7 +280,8 @@ export function tokensToTailwind(data, sourceName = "tokens.json") {
   for (const token of rawTokens) {
     const raw = resolveAliasValue(token, tokenMap);
     if (raw == null) continue;
-    const cleanKey = token.name
+    const effectiveName = canonicalTokenName(token.name, token.originalName);
+    const cleanKey = effectiveName
       .toLowerCase()
       .replace(/^(color|spacing|space|dimension|sizing|radius|border-radius|border-width|font-size|font-weight|font-family|font|shadow)\./g, "")
       .replace(/^(size|family|weight)\./g, "")

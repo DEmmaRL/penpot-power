@@ -9,7 +9,7 @@ Reference for the `connection-setup` skill. Remote (hosted) MCP server mode.
 | Tool calls fail fast with "tab appears suspended" | Browser froze/unloaded the Penpot tab (MCP runs inside it) | Focus the Penpot tab, wait for MCP to reconnect, retry. Keep the tab active/pinned. |
 | "No Penpot plugin instance is connected" | The in-file plugin isn't connected, or the tab was unloaded | In Penpot: **File → MCP Server → Connect**; keep the plugin connected. |
 | Client lists no Penpot tools | MCP not enabled, bad URL, or key missing/expired | Check **Your account → Integrations → MCP Server** is enabled and the URL/key in the client config are current. |
-| "Connection cannot be established" / expired key | The MCP key expired | Regenerate the key in Integrations and update `PENPOT_MCP_KEY`. Regenerating revokes the old key immediately. |
+| "Connection cannot be established" / expired key | The MCP key expired | Regenerate the key in Integrations and update `PENPOT_LOCAL_KEY` or `PENPOT_REMOTE_KEY`. Regenerating revokes the old key immediately. |
 | Agent edits the wrong page | MCP always targets the **focused page** in the **active MCP tab** | Focus the intended file/page; ensure that tab owns MCP (only one tab can at a time). |
 | `execute_code` throws a confusing `ReferenceError` | No Penpot plugin is connected, so the API globals aren't available | Connect the plugin (**File → MCP Server → Connect**) before running code; re-run after the status shows connected. |
 | Browser blocks the connection | Chromium private-network / local restrictions (mostly local mode) | Allow local network access, or use Firefox. (Primarily affects local mode.) |
@@ -51,7 +51,7 @@ return {
 1. In Penpot, navigate to **Your account → Integrations → MCP Server**.
 2. Click **Generate / Regenerate MCP Key**. (This invalidates any previous key immediately).
 3. Copy the URL containing the new `userToken`.
-4. Update `PENPOT_MCP_KEY` in your Kiro environment.
+4. Update `PENPOT_LOCAL_KEY` (for `penpot-local`) or `PENPOT_REMOTE_KEY` (for `penpot-remote`) in your Kiro environment.
 5. Re-run the diagnostic snippet.
 
 ### 4. Wrong Page Focused
@@ -61,10 +61,10 @@ return {
 
 ## The MCP key (userToken)
 
-- Personal, non-recoverable token that authenticates your client with the hosted
+- Personal, non-recoverable token that authenticates your client with the
   MCP server. Only one key per user at a time. Shown **once** on creation.
 - Embedded in the server URL as `?userToken=...`. This power keeps it out of
-  source via the `PENPOT_MCP_KEY` placeholder in `mcp.json`.
+  source via the `PENPOT_LOCAL_KEY` and `PENPOT_REMOTE_KEY` placeholders in `mcp.json`.
 - Treat it like a password: never commit it, screenshot it, or paste it in chat.
   Regenerate if it may have leaked (this disconnects clients using the old key).
 

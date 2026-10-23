@@ -17,7 +17,8 @@ system.
 ## Prerequisite
 
 Tools must be reachable (run `connection-setup`), and the intended page must be
-the focused one.
+the focused one. Tool names are namespaced by server profile (`penpot-local:execute_code`
+vs `penpot-remote:execute_code`); call the profile matching your target environment.
 
 ## Design-system-first rule
 

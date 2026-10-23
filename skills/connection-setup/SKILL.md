@@ -80,7 +80,7 @@ If the call throws an error or returns `status: "no_page"`, immediately run the 
 **Agent Action Protocol:**
 1. Direct the user to **Your account → Integrations → MCP Server** in Penpot.
 2. Click **Generate / Regenerate MCP Key**. (Note: this invalidates old keys).
-3. Update the client environment with the new `PENPOT_MCP_KEY`.
+3. Update the client environment with the new `PENPOT_LOCAL_KEY` or `PENPOT_REMOTE_KEY`.
 4. Re-run the **Step 0 Healthcheck Probe**.
 
 ### Procedure 4: Target Page Guard (Prevent Mutating Wrong Page)
@@ -119,6 +119,7 @@ This power's `mcp.json` supports dual connection profiles:
 
 Kiro prompts for these variables on first activation / use. Do not ask the user to type
 the key into the conversation; it should go into the environment/secret prompt.
+*(Note: Most users only work in one environment at a time—either `penpot-local` or `penpot-remote`. It is normal for the unused profile to remain unconfigured or show as disconnected).*
 
 ## Step 3: Connect the plugin to the file
 

@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `create-modify`: added patterns for CSS Grid layout (`board.addGridLayout()`), local component creation/instantiation (`createComponent` / `instance`), and prototyping interactions (`addInteraction`).
 - `connection-setup`: operational Diagnostic Healthcheck Probe and structured recovery protocols
   for suspended browser tabs, dropped plugin instances, and invalid keys, plus focused page guardrails.
-- `package.json`: zero-dependency Node.js manifest running 32 unit tests via `npm test`.
+- `package.json`: zero-dependency Node.js manifest running 38 unit tests via `npm test`.
 - `README.md`: documented the 5 Future Ecosystem Integrations (Style Dictionary v4 presets, Tokens Studio Git sync bridge, Storybook/Codebase component manifest mapper, Automated Visual Regression diffing, and GitHub Actions CI + schema validation).
 
 ### Changed
